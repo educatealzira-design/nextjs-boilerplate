@@ -2,7 +2,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import styles from './students.module.css';
-import './globals.css';
 
 const REFERRALS = [
   { value: 'AMIGOS', label: 'Amigos' },
