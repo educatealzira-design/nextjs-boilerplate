@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import styles from './send.module.css';
+import './globals.css';
 
 function waLink(phone, text){
   if (!phone) return null;
