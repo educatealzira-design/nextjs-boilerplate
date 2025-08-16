@@ -1,0 +1,595 @@
+'use client';
+
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import Link from 'next/link';
+import {
+  DndContext, useSensor, useSensors, PointerSensor,
+  closestCenter, useDroppable, useDraggable
+} from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
+import styles from './page.module.css';
+
+
+const DAYS = [
+  { key: 1, label: 'Lun' },
+  { key: 2, label: 'Mar' },
+  { key: 3, label: 'Mié' },
+  { key: 4, label: 'Jue' },
+  { key: 5, label: 'Vie' }
+];
+
+const TEACHERS = [
+  { key: 'NURIA', label: 'Nuria' },
+  { key: 'SANTI', label: 'Santi' },
+];
+
+const START_HOUR = 15.5;
+const END_HOUR = 21.5;
+const SLOT_MIN = 60;
+
+function toMinutes(hhmm) {
+  const [h, m] = String(hhmm||'0:0').split(':').map(Number);
+  return (Number(h)||0)*60 + (Number(m)||0);
+}
+function formatDur(min) {
+  const h = Math.floor((min||0)/60), m = (min||0)%60;
+  return `${h?`${h}h`:''}${h&&m?' ':''}${m?`${m}m`:''}` || '0m';
+}function minutesToLabel(mins) {
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+}
+function range(start, end, step){ const out=[]; for(let i=start;i<=end;i+=step) out.push(i); return out; }
+function overlaps(aStart, aDur, bStart, bDur){ const aEnd=aStart+aDur, bEnd=bStart+bDur; return aStart<bEnd && bStart<aEnd; }
+
+function Draggable({ id, children, ...props }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id });
+  const style = { transform: CSS.Translate.toString(transform), touchAction: 'none' };
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...listeners}
+      {...attributes}
+      className={`${styles.draggable} ${isDragging ? styles.dragging : ''} ${props.className||''}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+function DroppableCell({ id, children, isOver, className }) {
+  const { setNodeRef, isOver: over } = useDroppable({ id });
+  const active = isOver ?? over;
+  return (
+    <div
+      ref={setNodeRef}
+      className={`${styles.droppableCell} ${active ? styles.droppableActive : ''} ${className || ''}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+function EventBlock({ lesson, student, conflict, teacherKey, onDelete, onSetActual}) {
+  const [open, setOpen] = useState(false);
+  const displayStart = lesson.actualStartMin ?? lesson.startMin;
+  const displayDur   = lesson.actualDurMin   ?? lesson.durMin;
+
+  const [from, setFrom] = useState(() => {
+    const h = String(Math.floor(displayStart/60)).padStart(2,'0');
+    const m = String(displayStart%60).padStart(2,'0');
+    return `${h}:${m}`;
+  });
+  const [to, setTo] = useState(() => {
+    const end = displayStart + displayDur;
+    const h = String(Math.floor(end/60)).padStart(2,'0');
+    const m = String(end%60).padStart(2,'0');
+    return `${h}:${m}`;
+  });
+  function stop(e){ e.stopPropagation(); e.preventDefault(); }
+
+  return (
+    <div
+      className={styles.eventBlock}
+      title={`${student?.fullName||'(Alumno)'} — ${minutesToLabel(displayStart)} · ${formatDur(displayDur)}`}
+    >
+      {/* borrar */}
+      <button
+        aria-label="Eliminar" title="Eliminar"
+        onPointerDown={stop} onMouseDown={stop} onTouchStart={stop}
+        onClick={(e)=>{ stop(e); onDelete?.(); }}
+        className={styles.deleteBtn}
+      >✕</button>
+
+      {/* reloj */}
+      <button
+        aria-label="Duración real" title="Duración real"
+        onPointerDown={stop} onMouseDown={stop} onTouchStart={stop}
+        onClick={(e)=>{ stop(e); setOpen(v=>!v); }}
+        className={`${styles.clockBtn} ${lesson.actualDurMin!=null ? styles.clockActive : ''}`}
+      >🕒</button>
+
+      <div className={styles.eventText}>
+        <div className={`${styles.eventName} ${conflict ? styles.conflictName : ''}`}>
+          {student?.fullName || '(Alumno)'}
+        </div>
+        <div className={styles.eventMeta}>
+          {minutesToLabel(displayStart)} · {formatDur(displayDur)}
+        </div>
+      </div>
+
+      {open && (
+        <div className={styles.popover} onClick={stop}>
+          <div className={styles.popTitle}>Duración real</div>
+          <div className={styles.popRow}>
+            <button className={styles.popBtn} onClick={()=>{ onSetActual?.({ presetMin:45 }); setOpen(false); }}>45 min</button>
+            <button className={styles.popBtn} onClick={()=>{ onSetActual?.({ presetMin:60 }); setOpen(false); }}>60 min</button>
+            <button className={styles.popBtn} onClick={()=>{ onSetActual?.({ presetMin:90 }); setOpen(false); }}>90 min</button>
+          </div>
+          <div className={styles.popSub}>O personaliza</div>
+          <div className={styles.popRow}>
+            <label className={styles.popLabel}>De</label>
+            <input type="time" value={from} onChange={e=>setFrom(e.target.value)} className={styles.popInput}/>
+            <label className={styles.popLabel}>a</label>
+            <input type="time" value={to} onChange={e=>setTo(e.target.value)} className={styles.popInput}/>
+          </div>
+          <div className={styles.popActions}>
+            <button
+              className={styles.popLink}
+              onClick={()=>{ onSetActual?.({ startHHMM:from, endHHMM:to }); setOpen(false); }}
+            >Guardar</button>
+            <button
+              className={styles.popLink}
+              onClick={()=>{ onSetActual?.({ clear:true }); setOpen(false); }}
+            >Restablecer</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Agrupación por etapas
+function normalize(s){ return String(s||'').toLowerCase().trim(); }
+// Devuelve uno de: 1-2PRIM, 3-4PRIM, 5-6PRIM, 1ESO, 2ESO, 3ESO, 4ESO, 1BACH, 2BACH, CICLO, Otros
+function courseGroup(course){
+  const c = normalize(course);
+
+  // PRIMARIA: “1º primaria”, “2 primaria”, etc.
+  const prim = c.match(/(\d)\s*º?\s*(?:prim|primaria)/);
+  if (prim) {
+    const n = Number(prim[1]);
+    if (n === 1 || n === 2) return '1-2PRIM';
+    if (n === 3 || n === 4) return '3-4PRIM';
+    if (n === 5 || n === 6) return '5-6PRIM';
+  }
+  if (/\bprimaria?\b/.test(c)) return '1-2PRIM'; // fallback si no especifican curso
+
+  // ESO: “1º ESO”, “3 ESO”…
+  const eso = c.match(/(\d)\s*º?\s*eso/);
+  if (eso) return `${eso[1]}ESO`;
+
+  // BACH: “1º Bach”, “2 bachillerato”
+  const bach = c.match(/(\d)\s*º?\s*(?:bach|bachiller|bachillerato)/);
+  if (bach) return `${bach[1]}BACH`;
+
+  // CICLO / FP
+  if (/(^|\b)(fp|ciclo|ciclos|grado medio|grado superior|formativo)(\b|$)/.test(c)) return 'CICLO';
+
+  return 'Otros';
+}
+
+const GROUPS = ['Todos','1-2PRIM','3-4PRIM','5-6PRIM','1ESO','2ESO','3ESO','4ESO','1BACH','2BACH','CICLO','Otros'];
+
+export default function Page(){
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  const [students, setStudents] = useState([]);
+  const [lessons, setLessons] = useState([]);
+  const [textQ, setTextQ] = useState('');
+  const [group, setGroup] = useState('Todos');
+  const exportRefNuria = useRef(null);
+  const exportRefSanti = useRef(null);
+
+  async function exportElementToPdf(el, fileName){
+    if (!el) return;
+    const [{ default: html2canvas }, jsPDFmod] = await Promise.all([
+      import('html2canvas'),
+      import('jspdf')
+    ]);
+    const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+    const imgData = canvas.toDataURL('image/png');
+
+    const pdf = new jsPDFmod.jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+
+    // Escala manteniendo proporción y encajando en una sola página
+    let imgW = pageW * 0.98;
+    let imgH = (canvas.height * imgW) / canvas.width;
+    if (imgH > pageH * 0.98) {
+      imgH = pageH * 0.98;
+      imgW = (canvas.width * imgH) / canvas.height;
+    }
+    const x = (pageW - imgW) / 2;
+    const y = (pageH - imgH) / 2;
+
+    pdf.addImage(imgData, 'PNG', x, y, imgW, imgH, undefined, 'FAST');
+    pdf.save(fileName);
+  }
+
+  async function exportTeacher(teacherKey){
+    const el = teacherKey === 'NURIA' ? exportRefNuria.current : exportRefSanti.current;
+    await exportElementToPdf(el, `Horario-${teacherKey}.pdf`);
+  }
+
+  async function loadAll(){
+    const [sRes, lRes] = await Promise.all([ fetch('/api/students'), fetch('/api/lessons') ]);
+    const s = await sRes.json();
+    const l = await lRes.json();
+    setStudents(s);
+    setLessons(l.map(x=>({ id:x.id, studentId:x.studentId, teacher:x.teacher, dayOfWeek:x.dayOfWeek, startMin:x.startMin, durMin:x.durMin,actualStartMin: x.actualStartMin ?? null, actualDurMin:   x.actualDurMin   ?? null,})));
+  }
+  useEffect(()=>{ loadAll(); }, []);
+
+  const timeSlots = useMemo(()=> range(toMinutes(START_HOUR), toMinutes(END_HOUR), SLOT_MIN), []);
+
+  function conflictLocal(lesson){
+    const student = students.find(s=>s.id===lesson.studentId);
+    if(!student) return null;
+    const ex = (student.extras||[]).find(ex => ex.dayOfWeek===lesson.dayOfWeek && overlaps(lesson.startMin, lesson.durMin, ex.startMin, ex.durMin));
+    return ex||null;
+  }
+
+  const countsByStudent = useMemo(()=>{
+    const m = new Map();
+    for(const ls of lessons){ m.set(ls.studentId, (m.get(ls.studentId)||0)+1); }
+    return m;
+  }, [lessons]);
+
+  function formatHoursFromMinutes(mins){
+    const h = (mins || 0) / 60;
+    return Number.isInteger(h) ? `${h}h` : `${Math.round(h*10)/10}h`;
+  }
+
+  const plannedMinutesByStudent = useMemo(()=>{
+    const m = new Map();
+    for (const ls of lessons) {
+      const mins = (ls.actualDurMin != null ? ls.actualDurMin : ls.durMin) || 0;
+      m.set(ls.studentId, (m.get(ls.studentId) || 0) + mins);
+    }
+    return m;
+  }, [lessons]);
+
+
+  const filtered = useMemo(()=>{
+    return students.filter(s=>{
+      const matchesText = s.fullName.toLowerCase().includes(textQ.toLowerCase()) || (s.course||'').toLowerCase().includes(textQ.toLowerCase());
+      const g = courseGroup(s.course);
+      const matchesGroup = (group==='Todos') ? true : (g===group);
+      return matchesText && matchesGroup;
+    });
+  }, [students, textQ, group]);
+
+  const eventsMap = useMemo(()=>{
+    const map = new Map();
+    for(const ls of lessons){
+      const key = `${ls.dayOfWeek}:${ls.startMin}:${ls.teacher}`;
+      if(!map.has(key)) map.set(key, []);
+      map.get(key).push(ls);
+    }
+    return map;
+  }, [lessons]);
+
+  function alreadyHasInCell(studentId, dayOfWeek, startMin, excludeId){
+    return lessons.some(ls =>
+      ls.studentId===studentId &&
+      ls.dayOfWeek===dayOfWeek &&
+      ls.startMin===startMin &&
+      ls.id !== excludeId
+    );
+  }
+
+  async function createLesson({ studentId, teacher, dayOfWeek, startMin}){
+    // duración por defecto del alumno
+    const st = students.find(s => s.id === studentId);
+    const durMin = st?.sessionDurMin ?? 60;  // ← usa 60 si no está definido
+
+    if (alreadyHasInCell(studentId, dayOfWeek, startMin)) { alert('⚠️ Ese alumno ya está en esta franja.'); return {ok:false}; }
+    const res = await fetch('/api/lessons', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ studentId, teacher, dayOfWeek, startMin, durMin })
+    });
+    if (res.status === 201) {
+      const data = await res.json();
+      setLessons(prev => [...prev, { id:data.id, studentId:data.studentId, teacher:data.teacher, dayOfWeek:data.dayOfWeek, startMin:data.startMin, durMin:data.durMin }]);
+      return { ok:true };
+    }
+    if (res.status === 409) { alert('⚠️ Ese alumno ya está en esta franja.'); return { ok:false }; }
+    alert('Error creando clase'); return { ok:false };
+  }
+
+  async function moveLesson(id, { teacher, dayOfWeek, startMin }){
+    const current = lessons.find(l=>l.id===id);
+    if (!current) return { ok:false };
+
+    if (alreadyHasInCell(current.studentId, dayOfWeek, startMin, id)) { alert('⚠️ Ese alumno ya está en esta franja.'); return { ok:false }; }
+    const res = await fetch(`/api/lessons/${id}`, {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ teacher, dayOfWeek, startMin })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setLessons(prev => prev.map(l => l.id === id ? { ...l, teacher:data.teacher, dayOfWeek:data.dayOfWeek, startMin:data.startMin } : l));
+      return { ok:true };
+    }
+    if (res.status === 409) { alert('⚠️ Ese alumno ya está en esta franja.'); return { ok:false }; }
+    alert('Error moviendo clase'); return { ok:false };
+  }
+
+  async function deleteLesson(id){
+    const res = await fetch(`/api/lessons/${id}`, { method:'DELETE' });
+    if (res.ok) setLessons(prev=>prev.filter(l=>l.id!==id)); else alert('Error eliminando');
+  }
+
+  function CellTeacher({ dia, inicioMin, teacherKey }){
+    const id = `cell:${dia}:${inicioMin}:${teacherKey}`;
+    const here = eventsMap.get(`${dia}:${inicioMin}:${teacherKey}`) || [];
+    const bgClass = teacherKey === 'NURIA' ? styles.cellNuria : styles.cellSanti;
+
+    return (
+      <DroppableCell id={id} className={bgClass}>
+        <div className={styles.cellInner}>
+          {here.map(ls => {
+            const student = students.find(s=>s.id===ls.studentId);
+            const conflict = conflictLocal(ls);
+            return (
+              <Draggable key={ls.id} id={`event:${ls.id}`}>
+                <EventBlock
+                  lesson={ls}
+                  student={student}
+                  conflict={!!conflict}
+                  teacherKey={teacherKey}
+                  onDelete={()=>deleteLesson(ls.id)}
+                  onSetActual={(opts)=>setLessonActual(ls.id, opts)}
+                />
+              </Draggable>
+            );
+          })}
+        </div>
+      </DroppableCell>
+    );
+  }
+
+  function onDragEnd(e){
+    const { active, over } = e; if(!over) return;
+    const [_, diaStr, inicioStr, teacherKey] = String(over.id).split(':');
+    const dayOfWeek = Number(diaStr); const startMin = Number(inicioStr);
+
+    if(String(active.id).startsWith('student:')){
+      const studentId = String(active.id).split(':')[1];
+      createLesson({ studentId, teacher: teacherKey, dayOfWeek, startMin });
+    } else if (String(active.id).startsWith('event:')){
+      const id = String(active.id).split(':')[1];
+      const curr = lessons.find(l=>l.id===id);
+      if (!curr) return;
+      // ✅ no-op: mismo sitio → no muevas ni valides
+      if (curr.teacher === teacherKey && curr.dayOfWeek === dayOfWeek && curr.startMin === startMin) return;
+      moveLesson(id, { teacher: teacherKey, dayOfWeek, startMin });
+    }
+  }
+
+
+  const anyConflict = lessons.some(ls => conflictLocal(ls));
+  const gridColsStyle = { gridTemplateColumns: `120px ${Array.from({length: DAYS.length * TEACHERS.length}).map(()=> '1fr').join(' ')}` };
+
+  async function setLessonActual(id, { startHHMM, endHHMM, presetMin, clear }) {
+    let actualStartMin = undefined;
+    let actualDurMin = undefined;
+
+    if (clear) {
+      actualStartMin = null;
+      actualDurMin = null;
+    } else if (startHHMM && endHHMM) {
+      const s = toMinutes(startHHMM);
+      const e = toMinutes(endHHMM);
+      if (e <= s) { alert('La hora de fin debe ser posterior a la de inicio.'); return { ok:false }; }
+      actualStartMin = s;
+      actualDurMin = e - s;
+    } else if (typeof presetMin === 'number') {
+      actualDurMin = presetMin;
+      // si no se da inicio real, mantenemos el de la franja
+    } else {
+      return { ok:false };
+    }
+
+    const res = await fetch(`/api/lessons/${id}`, {
+      method:'PUT',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ actualStartMin, actualDurMin })
+    });
+    if (!res.ok) { alert('Error guardando duración real'); return { ok:false }; }
+    const data = await res.json();
+
+    setLessons(prev => prev.map(l => l.id===id ? {
+      ...l,
+      actualStartMin: data.actualStartMin ?? null,
+      actualDurMin: data.actualDurMin ?? null,
+    } : l));
+
+    return { ok:true };
+  }
+
+  function ExportGrid({ teacherKey, lessons, students }) {
+    const timeSlots = useMemo(()=> range(toMinutes(START_HOUR), toMinutes(END_HOUR), SLOT_MIN), []);
+    return (
+      <div className={styles.exportRoot}>
+        <div className={styles.exportHeader}>
+          Horario — {teacherKey === 'NURIA' ? 'Nuria' : 'Santi'}
+        </div>
+
+        <div className={styles.exportGrid} style={{ gridTemplateColumns: `120px repeat(${DAYS.length}, 1fr)` }}>
+          {/* Cabecera días */}
+          <div></div>
+          {DAYS.map(d => (
+            <div key={`day-${d.key}`} className={styles.exportDay}>{d.label}</div>
+          ))}
+
+          {/* Filas por hora */}
+          {timeSlots.map(start => (
+            <React.Fragment key={start}>
+              <div className={styles.exportHour}>{minutesToLabel(start)}</div>
+              {DAYS.map(d => {
+                const here = lessons.filter(l => l.teacher===teacherKey && l.dayOfWeek===d.key && l.startMin===start);
+                const hasConflict = here.some(ls => {
+                  const st = students.find(s=>s.id===ls.studentId);
+                  if(!st) return false;
+                  return (st.extras||[]).some(ex =>
+                    ex.dayOfWeek===ls.dayOfWeek &&
+                    overlaps(ls.actualStartMin ?? ls.startMin, ls.actualDurMin ?? ls.durMin, ex.startMin, ex.durMin)
+                  );
+                });
+                return (
+                  <div key={`${teacherKey}-${d.key}-${start}`} className={`${styles.exportCell} ${teacherKey==='NURIA'?styles.exportCellNuria:styles.exportCellSanti}`}>
+                    {hasConflict && <div className={styles.exportConflict} />}
+                    <div className={styles.exportStack}>
+                      {here.map(ls => {
+                        const st = students.find(s=>s.id===ls.studentId);
+                        const displayStart = ls.actualStartMin ?? ls.startMin;
+                        const displayDur   = ls.actualDurMin ?? ls.durMin;
+                        return (
+                          <div key={ls.id} className={`${styles.exportEvent} ${teacherKey==='NURIA'?styles.eventNuria:styles.eventSanti}`}>
+                            <div className={`${styles.exportEventName} ${/* rojo si conflicto */ (hasConflict? styles.conflictName : '')}`}>
+                              {st?.fullName || '(Alumno)'}
+                            </div>
+                            <div className={styles.exportEventMeta}>
+                              {minutesToLabel(displayStart)} · {displayDur}m
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+
+
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+      <div className={styles.layout}>
+        {/* Cabecera */}
+        <div className={styles.header}>
+          <div className={styles.title}><img src="/logo.png" alt="Edúcate" style={{ height:'85px', width:'auto'}}/></div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button onClick={()=>exportTeacher('NURIA')} className={styles.btnOutline}>PDF Nuria</button>
+            <button onClick={()=>exportTeacher('SANTI')} className={styles.btnOutline}>PDF Santi</button>
+            <Link href="/send" className={styles.btnPrimary}>Enviar horario</Link>
+            <Link href="/students" className={styles.btnPrimary}>BD</Link>
+          </div>
+        </div>
+
+        {/* Panel izquierdo */}
+        <div className={styles.leftPanel}>
+          <div className={styles.searchRow}>
+            <input
+              value={textQ}
+              onChange={e=>setTextQ(e.target.value)}
+              placeholder="Buscar por nombre o curso..."
+              className={styles.input}
+            />
+            <select value={group} onChange={e=>setGroup(e.target.value)} className={styles.select}>
+              {GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
+            </select>
+          </div>
+
+          <div className={styles.listHeader}>Alumnos ({filtered.length})</div>
+          <div className={styles.studentList}>
+            {filtered.map(s => {
+              const count = countsByStudent.get(s.id) || 0;
+              return (
+                <Draggable key={s.id} id={`student:${s.id}`}>
+                  <div className={`${styles.studentCard} ${count>0 ? styles.assigned : ''}`}>
+                    {count>0 && <span className={styles.assignedBadge}>{count}</span>}
+                    <div className={styles.studentName}>{s.fullName}</div>
+                    <div className={styles.studentMetaRow}>
+                      <div className={styles.studentMeta}>
+                        {s.course} <span className={styles.muted}>· {courseGroup(s.course)}</span>
+                      </div>
+                      {(() => {
+                        const planned = plannedMinutesByStudent.get(s.id) || 0;
+                        const plannedStr = formatHoursFromMinutes(planned);
+                        const desiredStr = (s.desiredHours != null) ? `${s.desiredHours}h` : '—';
+                        return (
+                          <div className={styles.hoursBadgeInline}>
+                            {plannedStr} / {desiredStr}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                </Draggable>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Panel derecho */}
+        <div className={styles.rightPanel}>
+          {anyConflict && (
+            <div className={styles.warning}>
+              ⚠️ Hay clases que chocan con extraescolares. Revisa los nombres en rojo.
+            </div>
+          )}
+
+          <div className={styles.board}>
+            <div className={styles.scheduleGrid} style={gridColsStyle}>
+              {/* Fila 1: nombres de días (ocupan 2 columnas) */}
+              <div></div>
+              {DAYS.map(d => (
+                <div key={`day-${d.key}`} className={styles.dayHeader} style={{ gridColumn: 'span 2' }}>
+                  {d.label}
+                </div>
+              ))}
+
+              {/* Fila 2: profesores por día */}
+              <div></div>
+              {DAYS.map(d => TEACHERS.map(t => (
+                <div key={`head-${d.key}-${t.key}`} className={styles.teacherHeader}>
+                  <span className={styles.teacherChip}>{t.label}</span>
+                </div>
+              )))}
+
+              {/* Filas por hora */}
+              {timeSlots.map(start => (
+                <React.Fragment key={start}>
+                  <div className={styles.timeLabelCell}>
+                    {minutesToLabel(start)}
+                  </div>
+                  {DAYS.flatMap(d => TEACHERS.map(t => (
+                    <CellTeacher key={`${d.key}-${start}-${t.key}`} dia={d.key} inicioMin={start} teacherKey={t.key} />
+                  )))}
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* === Vistas ocultas para exportar a PDF === */}
+      <div ref={exportRefNuria} className={styles.exportHidden}>
+        <ExportGrid teacherKey="NURIA" lessons={lessons} students={students} />
+      </div>
+      <div ref={exportRefSanti} className={styles.exportHidden}>
+        <ExportGrid teacherKey="SANTI" lessons={lessons} students={students} />
+      </div>
+      
+    </DndContext>
+);
+}
+

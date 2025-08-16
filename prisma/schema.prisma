@@ -1,0 +1,82 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") 
+}
+
+enum ReferralSource {
+  AMIGOS
+  COMPANEROS
+  INTERNET
+  OTRO
+}
+enum Teacher {
+  NURIA
+  SANTI
+}
+
+
+model Student {
+  id             String            @id @default(cuid())
+  fullName       String
+  phone          String?
+  address        String?
+  guardianName   String?
+  guardianPhone  String?
+  school         String?
+  course         String
+  specialty      String?
+  schoolSchedule String?
+  referralSource ReferralSource?
+  desiredHours   Int?
+  sessionDurMin  Int?
+  extras         Extracurricular[]
+  subjects       Subject[] 
+  lessons        Lesson[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  @@index([course])
+}
+
+model Subject {
+  id        String  @id @default(cuid())
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+  name      String
+  @@index([studentId])
+}
+
+model Extracurricular {
+  id        String  @id @default(cuid())
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+  label     String
+  dayOfWeek Int
+  startMin  Int
+  durMin    Int
+  @@index([studentId, dayOfWeek])
+}
+
+model Lesson {
+  id        String   @id @default(cuid())
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+  teacher   Teacher  @default(NURIA)
+  dayOfWeek Int
+  startMin  Int
+  durMin    Int
+  actualStartMin Int?
+  actualDurMin   Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentId, dayOfWeek, startMin])
+}
+

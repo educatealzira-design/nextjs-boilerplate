@@ -1,0 +1,217 @@
+:root{
+  /* paleta tomada de la imagen */
+  --beige-50:  #f6f3ef;   /* fondo suave */
+  --beige-75:  #f3f1ee;
+  --beige-100: #efebe6;   /* cabeceras */
+  --beige-200: #e4ded7;   /* bordes */
+  --beige-300: #d9d1c8;   /* botones */
+  --ink:       #222;      /* texto principal */
+  --muted:     #6b6b6b;   /* texto secundario */
+
+  --gap: 16px;
+  --radius: 12px;
+  --cell-h: 144px;
+  --border: var(--beige-200);
+}
+
+.layout{
+  display:grid; grid-template-columns: repeat(12, 1fr);
+  gap: var(--gap); padding: var(--gap);
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  color: var(--ink); background:#fff;
+}
+
+/* ======= CABECERA ======= */
+.header{
+  grid-column:1/-1; display:flex; align-items:center; justify-content:space-between; gap:12px;
+}
+.title{ font-size:22px; font-weight:800; letter-spacing:.2px; }
+
+/* botones iguales a la imagen (pastilla beige con texto oscuro) */
+.btnPrimary, .btnOutline{
+  appearance:none; border:1px solid var(--beige-200);
+  background: var(--beige-300); color:#4a4a4a;
+  padding:6px 10px; border-radius:14px; text-decoration:none;
+  font-weight:600; line-height:1; cursor:pointer;
+  transition: background .15s ease, border-color .15s ease, transform .05s ease;
+}
+.btnPrimary:hover, .btnOutline:hover{ background: var(--beige-100); transform: translateY(-1px); }
+
+/* ======= PANELES ======= */
+.leftPanel{ grid-column:1/-1; display:flex; flex-direction:column; gap:12px; }
+@media (min-width:768px){ .leftPanel{ grid-column:1/span 3; } }
+.rightPanel{ grid-column:1/-1; }
+@media (min-width:768px){ .rightPanel{ grid-column:4/-1; } }
+
+.caption{ font-size:13px; color:var(--muted); line-height:1.45; }
+
+/* ======= BUSCADOR ======= */
+.searchRow{ display:flex; gap:8px; }
+.input, .select{
+  border:1px solid var(--border); border-radius:12px; padding:8px 12px;
+  font:inherit; width:100%; background:#fff; outline:none;
+}
+.select{ max-width:180px; }
+.input:focus, .select:focus{ border-color:#cfc7bd; box-shadow:0 0 0 3px rgba(217,209,200,.35); }
+
+/* ======= LISTA ALUMNOS ======= */
+.listHeader{ font-size:13px; font-weight:700; }
+.studentList{
+  border:1px solid var(--border); border-radius:12px; background:#fff;
+  padding:8px; max-height:60vh; overflow:auto; display:grid; gap:8px;
+}
+.studentList::-webkit-scrollbar{ width:10px; }
+.studentList::-webkit-scrollbar-thumb{ background:var(--beige-200); border-radius:999px; }
+
+.studentCard{
+  position:relative; background:#fff;
+  border:1px solid var(--border); border-radius:12px; padding:10px;
+}
+.studentName{ font-size:14px; font-weight:700; }
+.studentMeta{ font-size:12px; color:#555555; }
+.muted{ opacity:.6; }
+
+/* fila con curso + horas, como en la imagen (chips grises) */
+.studentMetaRow{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.hoursBadge, .hoursBadgeInline{
+  display:inline-block; font-size:12px; padding:2px 8px; border-radius:999px;
+  background:#f1f1f1; color:#333;
+}
+
+/* contador asignadas (pastilla pequeña arriba dcha) */
+.assignedBadge{
+  position:absolute; top:6px; right:6px;
+  background:#4b4b4b; color:#fff; border-radius:999px; padding:2px 8px; font-size:11px; font-weight:700;
+}
+
+/* ======= TABLERO ======= */
+.board{
+  background:#fff; border:1px solid var(--border); border-radius:12px;
+  overflow:auto; max-height: calc(100vh - 160px);
+}
+.board::-webkit-scrollbar{ height:10px; width:10px; }
+.board::-webkit-scrollbar-thumb{ background:var(--beige-200); border-radius:999px; }
+
+.scheduleGrid{ display:grid; gap:0; }
+
+/* Cabecera días (beige y sticky) */
+.dayHeader{
+  text-align:center; font-weight:800; padding:10px 0;
+  background: var(--beige-100); border-bottom:1px solid var(--border);
+  position:sticky; top:0; z-index:5;
+}
+
+/* Franja de profesores (texto negro pequeño, fondo blanco) */
+.teacherHeader{
+  text-align:center; font-size:12px; padding:6px 0; color:#111;
+  background:#fff; border-bottom:1px solid var(--border);
+  position:sticky; top:42px; z-index:4;
+}
+.teacherChip{
+  display:inline-block; padding:0; background:transparent; color:#111; font-weight:600;
+}
+
+/* Primera columna de horas (pegada a la izq) */
+.timeLabelCell{
+  font-size:12px; color:#777; padding-right:8px; height:var(--cell-h);
+  display:flex; align-items:flex-start; justify-content:flex-end; padding-top:6px;
+  position:sticky; left:0; z-index:3; background:#fff; border-right:1px solid var(--border);
+}
+
+/* Celdas del horario: fondo blanco con grid beige muy sutil */
+.droppableCell{
+  position:relative; height:var(--cell-h);
+  border-right:1px solid var(--border); border-bottom:1px solid var(--border);
+  background:#fff;
+}
+.droppableActive{ outline:2px solid rgba(0,0,0,.06); outline-offset:-2px; }
+
+/* En la imagen no hay color de profesor en celdas, así que ambos blancos */
+.cellNuria{ background:#fff; }
+.cellSanti{ background:#fff; }
+
+.cellInner{ display:flex; flex-direction:column; gap:6px; padding:6px; }
+
+/* Bloques de evento (pastilla blanca borde gris-azulado leve) */
+.eventBlock{
+  position:relative; width:100%; height:28px; display:flex; align-items:center; gap:8px; padding:0 8px;
+  font-size:12px; border:1px solid #cbd5e1; border-radius:8px; background:#fff;
+}
+.eventText{ overflow:hidden; padding-right:22px; padding-left:7px; }
+.eventName{ font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; line-height:1; }
+.conflictName{ color:#dc2626; }
+.eventMeta{ font-size:10px; opacity:.7; line-height:1; }
+
+/* botones redondos en la “pastilla” */
+.deleteBtn, .clockBtn{
+  position:absolute; width:20px; height:20px; border-radius:999px;
+  border:1px solid var(--border); background:#fff; line-height:18px; font-size:11px; cursor:pointer;
+  box-shadow:0 1px 1px rgba(0,0,0,.06);
+}
+.deleteBtn{ right:-6px; top:-6px; color:#444; }
+.clockBtn{ left:-6px; top:-6px; color:#444; }
+.deleteBtn:hover, .clockBtn:hover{ background:var(--beige-75); }
+.clockActive{ outline:2px solid #10b98133; outline-offset:0; }
+
+/* drag */
+.draggable{ user-select:none; cursor:grab; }
+.dragging{ opacity:.75; cursor:grabbing; }
+
+/* aviso */
+.warning{
+  background:#fef2f2; border:1px solid #fecaca; color:#7f1d1d;
+  border-radius:12px; padding:8px; margin-bottom:8px; font-size:13px;
+}
+
+/* ======= POPOVER ======= */
+.popover{
+  position:absolute; z-index:10; top:26px; left:0; background:#fff;
+  border:1px solid var(--border); border-radius:10px; box-shadow:0 8px 20px rgba(0,0,0,.12);
+  padding:8px; min-width:230px;
+}
+.popTitle{ font-size:12px; font-weight:800; margin-bottom:6px; }
+.popSub{ font-size:11px; color:var(--muted); margin:6px 0 4px; }
+.popRow{ display:flex; gap:6px; align-items:center; }
+.popBtn{
+  font-size:12px; padding:4px 8px; border:1px solid var(--border); border-radius:8px; background:#f9f9f9; cursor:pointer;
+}
+.popBtn:hover{ background:#f1f1f1; }
+.popLabel{ font-size:12px; color:#444; }
+.popInput{ flex:1; border:1px solid var(--border); border-radius:8px; padding:4px 6px; font:inherit; }
+.popInput:focus{ border-color:#cfc7bd; box-shadow:0 0 0 3px rgba(217,209,200,.35); }
+.popActions{ display:flex; justify-content:flex-end; gap:10px; margin-top:6px; }
+.popLink{ background:none; border:none; color:#3b82f6; text-decoration:underline; padding:0; cursor:pointer; font-size:12px; }
+
+/* ======= EXPORT (PDF) ======= */
+.exportHidden{ position:absolute; left:-99999px; top:0; background:#fff; padding:16px; }
+.exportRoot{ width:1200px; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; color:#111; background:#fff; }
+.exportHeader{ font-size:18px; font-weight:800; margin-bottom:10px; }
+.exportGrid{ display:grid; border:1px solid var(--beige-200); border-right:0; border-bottom:0; }
+.exportDay{
+  text-align:center; font-weight:800; padding:6px 0;
+  border-right:1px solid var(--beige-200); border-bottom:1px solid var(--beige-200);
+  background:var(--beige-100);
+}
+.exportHour{
+  font-size:12px; color:#6b6b6b; height:110px; display:flex; align-items:flex-start; justify-content:flex-end;
+  padding:6px 8px 0 0; border-right:1px solid var(--beige-200); border-bottom:1px solid var(--beige-200); background:#fff;
+}
+.exportCell{
+  height:110px; border-right:1px solid var(--beige-200); border-bottom:1px solid var(--beige-200);
+  position:relative; padding:6px; background:#fff;
+}
+.exportConflict{ position:absolute; inset:3px; border:2px solid #ef4444; border-radius:8px; pointer-events:none; }
+.exportStack{ display:flex; flex-direction:column; gap:6px; }
+.exportEvent{
+  border:1px solid #d4d4d4; border-radius:8px; padding:6px 8px; background:#fafafa; font-size:12px;
+}
+.eventNuria,.eventSanti{ background:#fff; border-color:#d6d3d1; }
+.exportEventName{ font-weight:800; line-height:1.1; }
+.exportEventMeta{ font-size:11px; color:#6b7280; line-height:1.1; margin-top:2px; }
+
+
+
+
+
+
+

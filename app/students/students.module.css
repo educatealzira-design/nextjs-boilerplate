@@ -1,0 +1,195 @@
+:root{
+  --gap:16px;
+  --radius:12px;
+  --border:#e5e7eb;
+  --muted:#6b7280;
+}
+
+.container{
+  max-width:1120px;
+  margin:0 auto;
+  padding:16px;
+}
+
+.header{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+@media (min-width: 768px){
+  .header{
+    flex-direction:row;
+    align-items:center;
+    justify-content:space-between;
+  }
+}
+
+.title{ font-size:22px; font-weight:700; }
+.subtitle{ font-size:13px; color:var(--muted); }
+
+.actions{ display:flex; gap:8px; }
+.input, .select{
+  border:1px solid var(--border);
+  border-radius: var(--radius);
+  padding:8px 12px;
+  font: inherit;
+}
+.btn{
+  padding:8px 12px;
+  border-radius: var(--radius);
+  border:1px solid var(--border);
+  background:#fff;
+}
+.btnPrimary{ background:#2563eb; color:#fff; border-color:#2563eb; }
+.btnOutline{
+  display:inline-block;
+  margin-top:8px;
+  padding:6px 10px;
+  border:1px solid var(--border);
+  border-radius: var(--radius);
+  text-decoration:none;
+  color:#111;
+}
+.linkButton{
+  background:none;
+  border:none;
+  color:#2563eb;
+  text-decoration:underline;
+  padding:0;
+  font: inherit;
+  cursor:pointer;
+}
+.danger{ color:#dc2626; }
+
+.cardsGrid{
+  margin-top:16px;
+  display:grid;
+  gap:16px;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 640px){
+  .cardsGrid{ grid-template-columns: repeat(2, 1fr); }
+}
+@media (min-width: 1024px){
+  .cardsGrid{ grid-template-columns: repeat(3, 1fr); }
+}
+
+.card{
+  background:#fff;
+  border:1px solid var(--border);
+  border-radius: var(--radius);
+  padding:12px;
+  box-shadow: 0 1px 1px rgba(0,0,0,.04);
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.cardTop{
+  display:flex; align-items:flex-start; justify-content:space-between; gap:8px;
+}
+.cardTitle{ font-size:18px; font-weight:600; }
+.cardSubtitle{ font-size:12px; color:var(--muted); }
+.cardActions{ display:flex; gap:8px; }
+
+.cardGrid{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:8px;
+  font-size:14px;
+}
+.span2{ grid-column: 1 / -1; }
+.muted{ color:var(--muted); }
+
+.cardExtras{ font-size:14px; }
+.cardExtrasTitle{ font-weight:600; margin-bottom:4px; }
+.ul{ margin:0; padding-left:18px; }
+
+.modalOverlay{
+  position:fixed; inset:0;
+  background: rgba(0,0,0,.4);
+  display:flex; align-items:center; justify-content:center;
+  padding:16px; z-index:50;
+}
+.modal{
+  background:#fff;
+  width:100%; max-width: 768px;
+  max-height: 90vh;
+  border-radius: 16px;
+  overflow:auto;
+  box-shadow: 0 10px 30px rgba(0,0,0,.2);
+}
+.modalHeader{
+  padding:12px 16px;
+  border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between;
+}
+.modalTitle{ font-size:18px; font-weight:600; }
+.modalBody{
+  padding:16px;
+  display:grid;
+  grid-template-columns: 1fr;
+  gap:12px;
+}
+@media (min-width:768px){
+  .modalBody{
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.formRow{ display:flex; flex-direction:column; gap:6px; }
+.label{ font-size:13px; }
+.smallLabel{ font-size:12px; color:var(--muted); }
+
+.textarea{
+  border:1px solid var(--border);
+  border-radius: var(--radius);
+  padding:8px 12px;
+  font: inherit;
+  resize: vertical;
+}
+
+.rowHeader{ display:flex; align-items:center; justify-content:space-between; }
+.extrasList{ display:grid; gap:8px; margin-top:8px; }
+
+/* Grid 12 cols para la fila de extraescolares en desktop */
+.extraRow{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap:8px;
+  border:1px solid var(--border);
+  border-radius: var(--radius);
+  padding:8px;
+}
+@media (min-width:768px){
+  .extraRow{
+    grid-template-columns: repeat(12, 1fr);
+  }
+  .col{ }
+  .col1{ grid-column: span 1; }
+  .col2{ grid-column: span 2; }
+  .col3{ grid-column: span 3; }
+  .col4{ grid-column: span 4; }
+}
+
+.modalFooter{
+  padding:12px 16px;
+  border-top:1px solid var(--border);
+  display:flex; align-items:center; justify-content:flex-end; gap:8px;
+}
+
+.subjectsList{
+  display:grid;
+  gap:8px;
+  margin-top:8px;
+}
+.subjectRow{
+  display:grid;
+  grid-template-columns: 1fr auto;
+  gap:8px;
+  border:1px solid var(--border);
+  border-radius: var(--radius);
+  padding:8px;
+}
+@media (min-width:768px){
+  .subjectRow{ grid-template-columns: 1fr 100px; }
+}
+
