@@ -1,6 +1,9 @@
 'use client';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+
+export const runtime = 'nodejs';        // fuerza Node (no Edge) para evitar problemas con Prisma/fetch
+export const dynamic = 'force-dynamic'; // evita que Next intente pre-render estático
 
 const DAY_NAMES = ['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
 
@@ -10,9 +13,9 @@ function toHHMM(mins){
 }
 function endTime(startMin, durMin){ return toHHMM(startMin + durMin); }
 
-export default function SendPage(){
-  const sp = useSearchParams();
-  const weekStart = sp.get('weekStart'); // YYYY-MM-DD (lunes)
+function SendInner(){
+  const sp = useSearchParams();                // ✅ ahora sí, dentro de Suspense
+  const weekStart = sp.get('weekStart') || ''; // YYYY-MM-DD (lunes) o vacío
 
   const [students, setStudents] = useState([]);
   const [lessons, setLessons] = useState([]);
@@ -21,7 +24,7 @@ export default function SendPage(){
     async function load(){
       const [sRes, lRes] = await Promise.all([
         fetch('/api/students'),
-        fetch(`/api/lessons?weekStart=${weekStart ?? ''}`) // <-- SOLO esa semana
+        fetch(`/api/lessons?weekStart=${weekStart}`)
       ]);
       const s = await sRes.json();
       const l = await lRes.json();
@@ -31,15 +34,13 @@ export default function SendPage(){
     load();
   }, [weekStart]);
 
-  // Agrupa por alumno SOLO con los de esta semana ya traídos
+  // Agrupa por alumno SOLO con la semana pedida
   const lessonsByStudent = useMemo(() => {
     const map = new Map();
     for (const ls of lessons) {
-      const key = ls.studentId;
-      if (!map.has(key)) map.set(key, []);
-      map.get(key).push(ls);
+      if (!map.has(ls.studentId)) map.set(ls.studentId, []);
+      map.get(ls.studentId).push(ls);
     }
-    // ordena por dia/hora y quita duplicados exactos
     for (const [sid, arr] of map) {
       const seen = new Set();
       const ordered = arr
@@ -55,12 +56,9 @@ export default function SendPage(){
     return map;
   }, [lessons]);
 
-  function teacherText(t){
-    return t === 'NURIA' ? 'conmigo' : 'con Santi';
-  }
+  function teacherText(t){ return t === 'NURIA' ? 'conmigo' : 'con Santi'; }
 
   function buildMessage(student, items){
-    // items: SOLO la semana actual
     if (!items || items.length === 0) {
       return `Hola ${student.fullName.split(' ')[0]}, esta semana no tienes clases programadas.`;
     }
@@ -88,7 +86,7 @@ export default function SendPage(){
         {students.map(st => {
           const items = lessonsByStudent.get(st.id) || [];
           const msg = buildMessage(st, items);
-          const phone = (st.phone || '').replace(/\D/g,''); // limpiar espacios/guiones
+          const phone = (st.phone || '').replace(/\D/g,'');
           const waLink = phone ? `https://wa.me/34${phone}?text=${encodeURIComponent(msg)}` : null;
 
           return (
@@ -118,5 +116,13 @@ export default function SendPage(){
         })}
       </div>
     </div>
+  );
+}
+
+export default function Page(){
+  return (
+    <Suspense fallback={<div style={{ padding:16 }}>Cargando…</div>}>
+      <SendInner />
+    </Suspense>
   );
 }
