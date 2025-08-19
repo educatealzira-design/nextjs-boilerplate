@@ -1,6 +1,23 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
+// Normaliza a lunes 00:00 UTC
+function mondayUTC(date = new Date()) {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const dow = (d.getUTCDay() + 6) % 7; // Lunes=0
+  d.setUTCDate(d.getUTCDate() - dow);
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
+
+// Convierte 'YYYY-MM-DD' (lunes local) a lunes UTC normalizado
+function parseWeekStart(param) {
+  if (!param) return mondayUTC(new Date());
+  const [y, m, dd] = String(param).split('-').map(Number);
+  const d = new Date(Date.UTC(y, (m || 1) - 1, dd || 1));
+  return mondayUTC(d);
+}
+
 function overlaps(aStart, aDur, bStart, bDur) {
   const aEnd = aStart + aDur; const bEnd = bStart + bDur;
   return aStart < bEnd && bStart < aEnd;
@@ -22,6 +39,8 @@ export async function PUT(req, { params }) {
   const body = await req.json();
   const current = await prisma.lesson.findUnique({ where: { id: params.id } });
   if (!current) return NextResponse.json({ error: "not found" }, { status: 404 });
+
+  const weekStart = body.weekStart ? parseWeekStart(body.weekStart) : current.weekStart ?? mondayUTC(new Date());
 
   const payload = {
     studentId: body.studentId ?? current.studentId,
@@ -55,7 +74,16 @@ export async function PUT(req, { params }) {
 
   const updated = await prisma.lesson.update({
     where: { id: params.id },
-    data: payload,
+    data: {
+      teacher: body.teacher ?? current.teacher,
+      dayOfWeek: body.dayOfWeek != null ? Number(body.dayOfWeek) : current.dayOfWeek,
+      startMin: body.startMin != null ? Number(body.startMin) : current.startMin,
+      payload,
+      weekStart,
+      // actualStartMin / actualDurMin si también los cambias aquí
+      ...(body.actualStartMin !== undefined ? { actualStartMin: body.actualStartMin } : {}),
+      ...(body.actualDurMin !== undefined ? { actualDurMin: body.actualDurMin } : {}),
+    },
     include: { student: { include: { extras: true } } }
   });
   return NextResponse.json({ ...updated, conflict });

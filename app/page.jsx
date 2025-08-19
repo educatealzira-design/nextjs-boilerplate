@@ -8,7 +8,6 @@ import {
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import styles from './page.module.css';
-import './globals.css';
 
 
 const DAYS = [
@@ -18,6 +17,27 @@ const DAYS = [
   { key: 4, label: 'Jue' },
   { key: 5, label: 'Vie' }
 ];
+
+// para poner la fecha en el horario
+
+function addDays(d, n){ const x = new Date(d); x.setDate(x.getDate()+n); return x; }
+function toISODateLocal(d){
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), dd=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${dd}`;
+}
+function capitalize(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
+function mondayOfWeek(date = new Date()){
+  const d = new Date(date); d.setHours(0,0,0,0);
+  const dow = (d.getDay() + 6) % 7; // Lunes=0
+  d.setDate(d.getDate() - dow);
+  return d;
+}
+function ddmmyy(dt){
+  const d = String(dt.getDate()).padStart(2,'0');
+  const m = String(dt.getMonth()+1).padStart(2,'0');
+  const y = String(dt.getFullYear()).slice(-2);
+  return `${d}/${m}/${y}`;
+}
 
 const TEACHERS = [
   { key: 'NURIA', label: 'Nuria' },
@@ -190,6 +210,16 @@ export default function Page(){
   const [group, setGroup] = useState('Todos');
   const exportRefNuria = useRef(null);
   const exportRefSanti = useRef(null);
+  const [weekStart, setWeekStart] = useState(()=> mondayOfWeek(new Date()));
+  const [weekSaved, setWeekSaved] = useState(false);
+
+  const weekDates = useMemo(() => {
+    const weekdayFmt = new Intl.DateTimeFormat('es-ES', { weekday: 'long' });
+    return DAYS.map((d,i) => {
+      const dt = addDays(weekStart, i);
+      return { ...d, pretty: `${capitalize(weekdayFmt.format(dt))} ${ddmmyy(dt)}`, date: dt };
+    });
+  }, [weekStart]);
 
   async function exportElementToPdf(el, fileName){
     if (!el) return;
@@ -223,14 +253,43 @@ export default function Page(){
     await exportElementToPdf(el, `Horario-${teacherKey}.pdf`);
   }
 
-  async function loadAll(){
-    const [sRes, lRes] = await Promise.all([ fetch('/api/students'), fetch('/api/lessons') ]);
+  async function loadAll(autoCloneIfEmpty = true){
+    const w = toISODateLocal(weekStart);
+    const [sRes, lRes, stRes] = await Promise.all([
+      fetch('/api/students'),
+      fetch(`/api/lessons?weekStart=${w}`),
+      fetch(`/api/weeks?weekStart=${w}`)
+    ]);
     const s = await sRes.json();
     const l = await lRes.json();
+    const st = stRes.ok ? await stRes.json() : { saved:false };
+
     setStudents(s);
-    setLessons(l.map(x=>({ id:x.id, studentId:x.studentId, teacher:x.teacher, dayOfWeek:x.dayOfWeek, startMin:x.startMin, durMin:x.durMin,actualStartMin: x.actualStartMin ?? null, actualDurMin:   x.actualDurMin   ?? null,})));
+    setLessons(l.map(x=>({
+      id:x.id, studentId:x.studentId, teacher:x.teacher, dayOfWeek:x.dayOfWeek,
+      startMin:x.startMin, durMin:x.durMin,
+      actualStartMin:x.actualStartMin ?? null, actualDurMin:x.actualDurMin ?? null,
+    })));
+    setWeekSaved(!!st.saved);
+
+    if (autoCloneIfEmpty && l.length === 0) {
+      const clone = await fetch('/api/weeks/clone', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ toWeekStart: w })
+      });
+      if (clone.status === 201) {
+        const created = await clone.json();
+        setLessons(created.map(x=>({
+          id:x.id, studentId:x.studentId, teacher:x.teacher, dayOfWeek:x.dayOfWeek,
+          startMin:x.startMin, durMin:x.durMin,
+          actualStartMin:x.actualStartMin ?? null, actualDurMin:x.actualDurMin ?? null,
+        })));
+      }
+    }
   }
+
   useEffect(()=>{ loadAll(); }, []);
+  useEffect(()=>{ loadAll(); }, [weekStart]);
 
   const timeSlots = useMemo(()=> range(toMinutes(START_HOUR), toMinutes(END_HOUR), SLOT_MIN), []);
 
@@ -290,19 +349,22 @@ export default function Page(){
     );
   }
 
-  async function createLesson({ studentId, teacher, dayOfWeek, startMin}){
-    // duración por defecto del alumno
+  async function createLesson({ studentId, teacher, dayOfWeek, startMin }){
+    const w = toISODateLocal(weekStart);
     const st = students.find(s => s.id === studentId);
-    const durMin = st?.sessionDurMin ?? 60;  // ← usa 60 si no está definido
+    const durMin = st?.sessionDurMin ?? 60;
 
-    if (alreadyHasInCell(studentId, dayOfWeek, startMin)) { alert('⚠️ Ese alumno ya está en esta franja.'); return {ok:false}; }
     const res = await fetch('/api/lessons', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ studentId, teacher, dayOfWeek, startMin, durMin })
+      body: JSON.stringify({ studentId, teacher, dayOfWeek, startMin, durMin, weekStart: w })
     });
     if (res.status === 201) {
       const data = await res.json();
-      setLessons(prev => [...prev, { id:data.id, studentId:data.studentId, teacher:data.teacher, dayOfWeek:data.dayOfWeek, startMin:data.startMin, durMin:data.durMin }]);
+      setLessons(prev => [...prev, {
+        id:data.id, studentId:data.studentId, teacher:data.teacher, dayOfWeek:data.dayOfWeek,
+        startMin:data.startMin, durMin:data.durMin,
+        actualStartMin:data.actualStartMin ?? null, actualDurMin:data.actualDurMin ?? null,
+      }]);
       return { ok:true };
     }
     if (res.status === 409) { alert('⚠️ Ese alumno ya está en esta franja.'); return { ok:false }; }
@@ -310,17 +372,20 @@ export default function Page(){
   }
 
   async function moveLesson(id, { teacher, dayOfWeek, startMin }){
+    const w = toISODateLocal(weekStart);
     const current = lessons.find(l=>l.id===id);
     if (!current) return { ok:false };
-
     if (alreadyHasInCell(current.studentId, dayOfWeek, startMin, id)) { alert('⚠️ Ese alumno ya está en esta franja.'); return { ok:false }; }
+
     const res = await fetch(`/api/lessons/${id}`, {
       method:'PUT', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ teacher, dayOfWeek, startMin })
+      body: JSON.stringify({ teacher, dayOfWeek, startMin, weekStart: w })
     });
     if (res.ok) {
       const data = await res.json();
-      setLessons(prev => prev.map(l => l.id === id ? { ...l, teacher:data.teacher, dayOfWeek:data.dayOfWeek, startMin:data.startMin } : l));
+      setLessons(prev => prev.map(l => l.id === id ? {
+        ...l, teacher:data.teacher, dayOfWeek:data.dayOfWeek, startMin:data.startMin
+      } : l));
       return { ok:true };
     }
     if (res.status === 409) { alert('⚠️ Ese alumno ya está en esta franja.'); return { ok:false }; }
@@ -431,8 +496,8 @@ export default function Page(){
         <div className={styles.exportGrid} style={{ gridTemplateColumns: `120px repeat(${DAYS.length}, 1fr)` }}>
           {/* Cabecera días */}
           <div></div>
-          {DAYS.map(d => (
-            <div key={`day-${d.key}`} className={styles.exportDay}>{d.label}</div>
+          {weekDates.map(d => (
+            <div key={`day-${d.key}`} className={styles.dayHeader} style={{ gridColumn: 'span 2'}} >{d.pretty}</div>
           ))}
 
           {/* Filas por hora */}
@@ -488,10 +553,33 @@ export default function Page(){
         <div className={styles.header}>
           <div className={styles.title}><img src="/logo.png" alt="Edúcate" style={{ height:'85px', width:'auto'}}/></div>
           <div style={{ display: 'flex', gap: '8px' }}>
+            <button className={styles.btnOutline}
+                    onClick={()=> setWeekStart(prev => addDays(prev, -7))}>← Semana</button>
+
+            <div className={styles.weekBadge}>
+              Semana: {ddmmyy(weekStart)} — {ddmmyy(addDays(weekStart, 4))}
+              {weekSaved && <span className={styles.savedPill}>Guardado</span>}
+            </div>
+
+            <button className={styles.btnOutline}
+                    onClick={()=> setWeekStart(prev => addDays(prev, +7))}>Semana →</button>
+
+            <button className={styles.btnPrimary}
+                    onClick={async ()=>{
+                      const w = toISODateLocal(weekStart);
+                      const res = await fetch('/api/weeks', {
+                        method:'POST', headers:{'Content-Type':'application/json'},
+                        body: JSON.stringify({ weekStart: w, saved: true })
+                      });
+                      if (res.ok) setWeekSaved(true);
+                    }}>
+              Guardar semana
+            </button>
             <button onClick={()=>exportTeacher('NURIA')} className={styles.btnOutline}>PDF Nuria</button>
             <button onClick={()=>exportTeacher('SANTI')} className={styles.btnOutline}>PDF Santi</button>
             <Link href="/send" className={styles.btnPrimary}>Enviar horario</Link>
             <Link href="/students" className={styles.btnPrimary}>BD</Link>
+            <Link href="/receipts" className={styles.btnPrimary}>Recibos</Link>
           </div>
         </div>
 
@@ -552,9 +640,9 @@ export default function Page(){
             <div className={styles.scheduleGrid} style={gridColsStyle}>
               {/* Fila 1: nombres de días (ocupan 2 columnas) */}
               <div></div>
-              {DAYS.map(d => (
+              {weekDates.map(d => (
                 <div key={`day-${d.key}`} className={styles.dayHeader} style={{ gridColumn: 'span 2' }}>
-                  {d.label}
+                  {d.pretty}
                 </div>
               ))}
 

@@ -1,3 +1,19 @@
+:root{
+  /* paleta tomada de la imagen */
+  --beige-50:  #f6f3ef;   /* fondo suave */
+  --beige-75:  #f3f1ee;
+  --beige-100: #efebe6;   /* cabeceras */
+  --beige-200: #e4ded7;   /* bordes */
+  --beige-300: #d9d1c8;   /* botones */
+  --ink:       #222;      /* texto principal */
+  --muted:     #6b6b6b;   /* texto secundario */
+
+  --gap: 16px;
+  --radius: 12px;
+  --cell-h: 144px;
+  --border: var(--beige-200);
+}
+
 .layout{
   display:grid; grid-template-columns: repeat(12, 1fr);
   gap: var(--gap); padding: var(--gap);
@@ -192,6 +208,10 @@
 .eventNuria,.eventSanti{ background:#fff; border-color:#d6d3d1; }
 .exportEventName{ font-weight:800; line-height:1.1; }
 .exportEventMeta{ font-size:11px; color:#6b7280; line-height:1.1; margin-top:2px; }
+
+/* page.module.css */
+.weekBadge { padding:6px 10px; border-radius:8px; background:#f3f4f6; font-size:12px; }
+.savedPill { margin-left:8px; padding:2px 6px; border-radius:9999px; background:#16a34a; color:#fff; font-weight:600; font-size:11px; }
 
 
 

@@ -1,17 +1,8 @@
-:root {
-  /*GENERAL*/
-  --beige-50:  #f6f3ef;   /* fondo suave */
-  --beige-75:  #f3f1ee;
-  --beige-100: #efebe6;   /* cabeceras */
-  --beige-200: #e4ded7;   /* bordes */
-  --beige-300: #d9d1c8;   /* botones */
-  --ink:       #222;      /* texto principal */
-  --muted:     #6b6b6b;   /* texto secundario */
+@import "tailwindcss";
 
-  --gap: 16px;
-  --radius: 12px;
-  --cell-h: 144px;
-  --border: var(--beige-200);
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
 }
 
 @theme inline {

@@ -1,0 +1,24 @@
+.container{padding:24px;max-width:1200px;margin:0 auto}
+.header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:16px}
+.title{font-size:28px;margin:0}
+.subtitle{margin:4px 0 12px;color:#6b7280}
+.actions{display:flex;gap:8px;align-items:center}
+.row{display:flex;gap:8px;align-items:center;margin-top:8px}
+.label{font-weight:600}
+.input{border:1px solid #d1d5db;border-radius:8px;padding:8px 10px}
+.inputNum{width:90px;border:1px solid #d1d5db;border-radius:8px;padding:6px 8px;text-align:right}
+.btn{background:#111827;color:white;border:none;border-radius:10px;padding:8px 12px;cursor:pointer}
+.btn:hover{opacity:.9}
+.btnOutline{border:1px solid #d1d5db;background:#fff;border-radius:10px;padding:8px 12px;cursor:pointer}
+.chk{display:flex;gap:6px;align-items:center}
+.tableWrap{overflow:auto;border:1px solid #e5e7eb;border-radius:12px}
+.table{width:100%;border-collapse:separate;border-spacing:0}
+.table thead th{position:sticky;top:0;background:#f9fafb;border-bottom:1px solid #e5e7eb;padding:10px;text-align:left}
+.table tbody td{border-bottom:1px solid #f1f5f9;padding:10px;vertical-align:top}
+.table tfoot td{background:#f9fafb;border-top:1px solid #e5e7eb;padding:10px}
+.right{text-align:right}
+.name{font-weight:600}
+.details{margin-top:6px}
+.ul{margin:8px 0 0 16px;padding:0;}
+.dates{color:#6b7280;font-size:12px;margin-top:2px}
+.rowButtons{display:flex;gap:8px}

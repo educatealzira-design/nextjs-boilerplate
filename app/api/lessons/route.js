@@ -1,6 +1,24 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
+// Normaliza a lunes 00:00 UTC
+function mondayUTC(date = new Date()) {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const dow = (d.getUTCDay() + 6) % 7; // Lunes=0
+  d.setUTCDate(d.getUTCDate() - dow);
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
+
+// Convierte 'YYYY-MM-DD' (lunes local) a lunes UTC normalizado
+function parseWeekStart(param) {
+  if (!param) return mondayUTC(new Date());
+  const [y, m, dd] = String(param).split('-').map(Number);
+  const d = new Date(Date.UTC(y, (m || 1) - 1, dd || 1));
+  return mondayUTC(d);
+}
+
+
 function overlaps(aStart, aDur, bStart, bDur) {
   const aEnd = aStart + aDur; const bEnd = bStart + bDur;
   return aStart < bEnd && bStart < aEnd;
@@ -26,8 +44,9 @@ export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const day = searchParams.get("day");
   const where = day ? { dayOfWeek: Number(day) } : {};
+  const weekStart = parseWeekStart(searchParams.get('weekStart'));
   const lessons = await prisma.lesson.findMany({
-    where,
+    where: { weekStart },
     orderBy: [{ dayOfWeek: "asc" }, { startMin: "asc" }],
     include: { student: { include: { extras: true } } }
   });
@@ -36,12 +55,14 @@ export async function GET(req) {
 
 export async function POST(req) {
   const body = await req.json();
+  const weekStart = parseWeekStart(body.weekStart);
   const payload = {
     studentId: String(body.studentId),
     teacher: body.teacher === "NURIA" ? "NURIA" : "SANTI",
     dayOfWeek: Number(body.dayOfWeek),
     startMin: Number(body.startMin),
     durMin: Number(body.durMin || 60),
+    weekStart,
   };
 
   // Bloqueo: mismo alumno en la MISMA FRANJA (día + inicio), da igual el profesor

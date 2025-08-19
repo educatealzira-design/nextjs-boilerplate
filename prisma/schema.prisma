@@ -35,11 +35,13 @@ model Student {
   specialty      String?
   schoolSchedule String?
   referralSource ReferralSource?
+  billingRateEurHour  Float?
   desiredHours   Int?
   sessionDurMin  Int?
   extras         Extracurricular[]
   subjects       Subject[] 
   lessons        Lesson[]
+  invoice        Invoice[]
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
   @@index([course])
@@ -64,6 +66,13 @@ model Extracurricular {
   @@index([studentId, dayOfWeek])
 }
 
+model WeekState {
+  weekStart DateTime @id            // Lunes (00:00) de esa semana
+  saved     Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Lesson {
   id        String   @id @default(cuid())
   student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -76,7 +85,42 @@ model Lesson {
   actualDurMin   Int?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  weekStart DateTime?
 
+  @@index([weekStart, dayOfWeek, startMin, teacher])
   @@index([studentId, dayOfWeek, startMin])
+  @@index([teacher, dayOfWeek, startMin])
+}
+
+
+model Invoice {
+  id         String   @id @default(cuid())
+  student    Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId  String
+
+  /// Formato "YYYY-MM" (ej: "2025-08")
+  yearMonth  String
+
+  /// Tarifa aplicada ese mes (€/h)
+  rate       Float
+
+  /// Ajuste manual en minutos (puede ser negativo)
+  adjustMin  Int      @default(0)
+
+  /// Minutos totales facturados del mes (planificados + ajuste)
+  totalMin   Int
+
+  /// Importe total del recibo (EUR)
+  amount     Float
+
+  /// Estado del cobro
+  status     String   @default("PENDIENTE") // PENDIENTE | ENVIADO | PAGADO
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([studentId])
+  @@index([yearMonth])
+  @@unique([studentId, yearMonth]) // un recibo por alumno y mes
 }
 
