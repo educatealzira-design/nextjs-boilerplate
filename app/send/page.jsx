@@ -1,9 +1,12 @@
 'use client';
-import React, { Suspense, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
 
-export const runtime = 'nodejs';        // fuerza Node (no Edge) para evitar problemas con Prisma/fetch
-export const dynamic = 'force-dynamic'; // evita que Next intente pre-render estático
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import styles from '../page.module.css'; // ⬅️ reutilizamos estilos de la portada
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 const DAY_NAMES = ['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
 
@@ -13,9 +16,24 @@ function toHHMM(mins){
 }
 function endTime(startMin, durMin){ return toHHMM(startMin + durMin); }
 
+// Formatea el rango "Semana: dd/mm/yy — dd/mm/yy"
+function ddmmyy(dt){
+  const dd=String(dt.getDate()).padStart(2,'0');
+  const mm=String(dt.getMonth()+1).padStart(2,'0');
+  const yy=String(dt.getFullYear()).slice(-2);
+  return `${dd}/${mm}/${yy}`;
+}
+function mondayOf(date){
+  const d = new Date(date); d.setHours(0,0,0,0);
+  const dow = (d.getDay()+6)%7; d.setDate(d.getDate()-dow);
+  return d;
+}
+function addDays(d, n){ const x = new Date(d); x.setDate(x.getDate()+n); return x; }
+
 function SendInner(){
-  const sp = useSearchParams();                // ✅ ahora sí, dentro de Suspense
-  const weekStart = sp.get('weekStart') || ''; // YYYY-MM-DD (lunes) o vacío
+  const sp = useSearchParams();                 // ✅ dentro de Suspense
+  const weekStartStr = sp.get('weekStart') || ''; // YYYY-MM-DD o vacío
+  const weekStart = weekStartStr ? new Date(`${weekStartStr}T00:00:00`) : mondayOf(new Date());
 
   const [students, setStudents] = useState([]);
   const [lessons, setLessons] = useState([]);
@@ -24,7 +42,7 @@ function SendInner(){
     async function load(){
       const [sRes, lRes] = await Promise.all([
         fetch('/api/students'),
-        fetch(`/api/lessons?weekStart=${weekStart}`)
+        fetch(`/api/lessons?weekStart=${weekStartStr}`)
       ]);
       const s = await sRes.json();
       const l = await lRes.json();
@@ -32,9 +50,9 @@ function SendInner(){
       setLessons(l);
     }
     load();
-  }, [weekStart]);
+  }, [weekStartStr]);
 
-  // Agrupa por alumno SOLO con la semana pedida
+  // Agrupa y ordena SOLO la semana recibida; evita duplicados exactos
   const lessonsByStudent = useMemo(() => {
     const map = new Map();
     for (const ls of lessons) {
@@ -74,46 +92,60 @@ function SendInner(){
   }
 
   return (
-    <div style={{ padding: 16, maxWidth: 900, margin: '0 auto' }}>
-      <h1 style={{ fontWeight: 700, fontSize: 22, marginBottom: 12 }}>
-        Enviar horario — semana {weekStart || '(actual)'}
-      </h1>
-      <p style={{ opacity: .7, marginBottom: 16 }}>
-        Los mensajes se generan solo con las clases de la semana seleccionada.
-      </p>
+    <div className={styles.layout}>
+      {/* Cabecera (misma estética que la portada) */}
+      <div className={styles.header}>
+        <div className={styles.title}>
+          <img src="/logo.png" alt="Edúcate" style={{ height:'70px', width:'auto'}}/>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+          <Link href="/" className={styles.btnOutline}>← Volver al horario</Link>
+          <a href="https://web.whatsapp.com" target="_blank" rel="noopener noreferrer" className={styles.btnPrimary}>
+            Abrir WhatsApp Web
+          </a>
+          <Link href="/students" className={styles.btnPrimary}>BD</Link>
+          <div className={styles.weekBadge}>
+            Semana: {ddmmyy(weekStart)} — {ddmmyy(addDays(weekStart, 4))}
+          </div>
+        </div>
+      </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap: 12 }}>
-        {students.map(st => {
-          const items = lessonsByStudent.get(st.id) || [];
-          const msg = buildMessage(st, items);
-          const phone = (st.phone || '').replace(/\D/g,'');
-          const waLink = phone ? `https://wa.me/34${phone}?text=${encodeURIComponent(msg)}` : null;
+      {/* Contenido */}
+      <div className={styles.rightPanel}>
+        <div className={styles.board}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))', gap:12 }}>
+            {students.map(st => {
+              const items = lessonsByStudent.get(st.id) || [];
+              const msg = buildMessage(st, items);
+              const phone = (st.phone || '').replace(/\D/g,''); // quita espacios/guiones
+              const waLink = phone ? `https://wa.me/34${phone}?text=${encodeURIComponent(msg)}` : null;
 
-          return (
-            <div key={st.id} style={{ border:'1px solid #e5e7eb', borderRadius:12, padding:12, background:'#fff' }}>
-              <div style={{ fontWeight:600 }}>{st.fullName}</div>
-              <div style={{ fontSize:12, opacity:.7, margin:'6px 0 10px' }}>
-                {items.length} clase(s) esta semana
-              </div>
-              <textarea value={msg} readOnly rows={4}
-                        style={{ width:'100%', resize:'vertical', fontFamily:'inherit', padding:8 }}/>
-              <div style={{ display:'flex', gap:8, marginTop:8 }}>
-                <button onClick={()=>navigator.clipboard.writeText(msg)}
-                        style={{ padding:'8px 10px', borderRadius:8, border:'1px solid #e5e7eb' }}>
-                  Copiar
-                </button>
-                {waLink ? (
-                  <a href={waLink} target="_blank" rel="noopener noreferrer"
-                     style={{ padding:'8px 10px', borderRadius:8, background:'#25D366', color:'#fff', textDecoration:'none' }}>
-                    WhatsApp
-                  </a>
-                ) : (
-                  <span style={{ fontSize:12, opacity:.7 }}>Sin teléfono</span>
-                )}
-              </div>
-            </div>
-          );
-        })}
+              return (
+                <div key={st.id} style={{ border:'1px solid #e5e7eb', borderRadius:12, padding:12, background:'#fff' }}>
+                  <div style={{ fontWeight:600, marginBottom:6 }}>{st.fullName}</div>
+                  <div style={{ fontSize:12, opacity:.7, marginBottom:10 }}>
+                    {items.length} clase(s) esta semana
+                  </div>
+                  <textarea value={msg} readOnly rows={4}
+                            style={{ width:'100%', resize:'vertical', fontFamily:'inherit', padding:8, border:'1px solid #e5e7eb', borderRadius:8 }}/>
+                  <div style={{ display:'flex', gap:8, marginTop:8 }}>
+                    <button onClick={()=>navigator.clipboard.writeText(msg)}
+                            className={styles.btnOutline}>
+                      Copiar
+                    </button>
+                    {waLink ? (
+                      <a href={waLink} target="_blank" rel="noopener noreferrer" className={styles.btnPrimary}>
+                        WhatsApp
+                      </a>
+                    ) : (
+                      <span style={{ fontSize:12, opacity:.7 }}>Sin teléfono</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );
