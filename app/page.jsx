@@ -577,7 +577,7 @@ export default function Page(){
             </button>
             <button onClick={()=>exportTeacher('NURIA')} className={styles.btnOutline}>PDF Nuria</button>
             <button onClick={()=>exportTeacher('SANTI')} className={styles.btnOutline}>PDF Santi</button>
-            <Link href="/send" className={styles.btnPrimary}>Enviar horario</Link>
+            <Link href={`/send?weekStart=${toISODateLocal(weekStart)}`} className={styles.btnPrimary}>Enviar horario</Link>
             <Link href="/students" className={styles.btnPrimary}>BD</Link>
             <Link href="/receipts" className={styles.btnPrimary}>Recibos</Link>
           </div>
