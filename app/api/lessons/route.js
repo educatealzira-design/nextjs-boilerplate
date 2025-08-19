@@ -1,3 +1,6 @@
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
@@ -45,6 +48,7 @@ export async function GET(req) {
   const day = searchParams.get("day");
   const where = day ? { dayOfWeek: Number(day) } : {};
   const weekStart = parseWeekStart(searchParams.get('weekStart'));
+  const studentId = searchParams.get('studentId') || undefined;
   const lessons = await prisma.lesson.findMany({
     where: { weekStart },
     orderBy: [{ dayOfWeek: "asc" }, { startMin: "asc" }],
