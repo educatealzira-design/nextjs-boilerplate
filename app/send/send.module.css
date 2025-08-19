@@ -49,6 +49,9 @@
   display:inline-block; padding:8px 12px; border-radius: var(--radius);
   background:#25d366; color:#fff; border:1px solid #1da851; text-decoration:none;
 }
+.weekBadge { 
+  padding:6px 10px; border-radius:8px; background:#f3f4f6; font-size:12px; 
+}
 .btnDisabled{
   padding:8px 12px; border-radius: var(--radius); background:#f3f4f6; color:#9ca3af; border:1px solid var(--border);
 }
