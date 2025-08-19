@@ -1,8 +1,6 @@
 'use client';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import Link from 'next/link';
-import styles from './send.module.css';
 
 const DAY_NAMES = ['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
 
@@ -12,16 +10,7 @@ function toHHMM(mins){
 }
 function endTime(startMin, durMin){ return toHHMM(startMin + durMin); }
 
-
-function waLink(phone, text){
-  if (!phone) return null;
-  return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
-}
-
 export default function SendPage(){
-  const [data, setData] = useState({ range:'current', items: [] });
-  const [q, setQ] = useState('');
-  const [onlyWithPhone, setOnlyWithPhone] = useState(true);
   const sp = useSearchParams();
   const weekStart = sp.get('weekStart'); // YYYY-MM-DD (lunes)
 
@@ -42,15 +31,7 @@ export default function SendPage(){
     load();
   }, [weekStart]);
 
-  const filtered = useMemo(()=>{
-    const t = q.toLowerCase();
-    return data.items.filter(it=>{
-      if (onlyWithPhone && !it.phone) return false;
-      return (it.fullName||'').toLowerCase().includes(t);
-    });
-  }, [data, q, onlyWithPhone]);
-
-   // Agrupa por alumno SOLO con los de esta semana ya traídos
+  // Agrupa por alumno SOLO con los de esta semana ya traídos
   const lessonsByStudent = useMemo(() => {
     const map = new Map();
     for (const ls of lessons) {
@@ -74,7 +55,7 @@ export default function SendPage(){
     return map;
   }, [lessons]);
 
-   function teacherText(t){
+  function teacherText(t){
     return t === 'NURIA' ? 'conmigo' : 'con Santi';
   }
 
@@ -94,8 +75,7 @@ export default function SendPage(){
     return `Hola ${student.fullName.split(' ')[0]}, esta semana tienes clase ${body}. Muchas gracias.`;
   }
 
-
-return (
+  return (
     <div style={{ padding: 16, maxWidth: 900, margin: '0 auto' }}>
       <h1 style={{ fontWeight: 700, fontSize: 22, marginBottom: 12 }}>
         Enviar horario — semana {weekStart || '(actual)'}
