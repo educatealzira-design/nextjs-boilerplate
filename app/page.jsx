@@ -8,7 +8,6 @@ import {
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import styles from './page.module.css';
-import styles from './global.css';
 
 
 const DAYS = [
