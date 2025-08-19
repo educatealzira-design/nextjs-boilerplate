@@ -6,7 +6,9 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate --schema prisma/schema.prisma",
+    "prisma": { "schema": "prisma/schema.prisma" }
+
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
