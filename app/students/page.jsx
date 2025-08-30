@@ -16,6 +16,15 @@ const DAYS = [
   { value: 3, label: 'Mié' },
   { value: 4, label: 'Jue' },
   { value: 5, label: 'Vie' },
+  { value: 6, label: 'Sáb' },
+  { value: 7, label: 'Dom' },
+];
+
+const DAY_LABEL = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+
+
+const SUBJECT_OPTIONS = [
+  'Matemáticas','Física','Química','Castellano','Valenciano','Inglés','Primaria',
 ];
 
 function toMinutes(hhmm) {
@@ -29,43 +38,144 @@ function toHHMM(mins) {
   return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
 }
 
+// devuelve [1..7] desde fromDay a toDay (sin envolver, se asume from<=to)
+function daySpan(fromDay, toDay) {
+  const from = Number(fromDay);
+  const to = Number(toDay);
+  if (to < from) return []; // no tramos invertidos
+  return Array.from({ length: to - from + 1 }, (_, i) => from + i);
+}
+
+// solape de intervalos [aStart,aEnd) con [bStart,bEnd)
+function intervalsOverlap(aStart, aEnd, bStart, bEnd) {
+  return aStart < bEnd && bStart < aEnd;
+}
+
+
 function StudentForm({ initial, onCancel, onSaved }) {
   const [form, setForm] = useState(() => initial || {
     fullName: '', phone: '', address: '', guardianName: '', guardianPhone: '',
-    school: '', course: '', specialty: '', schoolSchedule: '', referralSource: '',
+    school: '', course: '', specialty: '', schoolBlocks: [], referralSource: '',
     desiredHours: '', extras: [], subjects: [],
   });
-
-  function addSubject() {
-    setForm(f => ({ ...f, subjects: [...(f.subjects||[]), { name: '' }] }));
-  }
-  function setSubject(i, v) {
-    setForm(f => ({ ...f, subjects: f.subjects.map((s, idx) => idx === i ? { ...s, name: v } : s) }));
-  }
-  function removeSubject(i) {
-    setForm(f => ({ ...f, subjects: f.subjects.filter((_, idx) => idx !== i) }));
- }
-
-
+  
   function setField(k, v) { setForm(f => ({ ...f, [k]: v })); }
+
+  // ----- ASIGNATURAS -----
+  function toggleSubject(name) {
+    setForm(f => {
+      const picked = new Set((f.subjects||[]).map(s => s.name));
+      if (picked.has(name)) {
+        return { ...f, subjects: (f.subjects||[]).filter(s => s.name !== name) };
+      }
+      return { ...f, subjects: [...(f.subjects||[]), { name }] };
+    });
+  }
+
+  // ----- EXTRAESCOLARES -----
   function addExtra() {
-    setForm(f => ({ ...f, extras: [...(f.extras||[]), { label: '', dayOfWeek: 1, startMin: 17*60, durMin: 60 }] }));
+    setForm(f => ({ ...f, extras: [...(f.extras||[]), { label: '', dayOfWeek: 1, startMin: 17*60, endMin: 18*60}] }));
   }
   function setExtra(i, k, v) { setForm(f => ({ ...f, extras: f.extras.map((e, idx) => idx === i ? { ...e, [k]: v } : e) })); }
   function removeExtra(i) { setForm(f => ({ ...f, extras: f.extras.filter((_, idx) => idx !== i) })); }
+  // Al editar un alumno existente, convierte durMin -> endMin para el formulario
+  useEffect(() => {
+    if (initial?.id) {
+      setForm(f => ({
+        ...f,
+        extras: (initial.extras || []).map(e => ({
+          ...e,
+          endMin: Number(e.startMin) + Number(e.durMin || 0),
+        })),
+      }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initial?.id]);
+
+
+  // ----- HORARIO ESCOLAR -----
+  function addSchoolBlock() {
+    setForm(f => ({
+      ...f,
+      schoolBlocks: [
+        ...(f.schoolBlocks || []),
+        { fromDay: 1, toDay: 5, startMin: 8*60, endMin: 17*60 }
+      ]
+    }));
+  }
+  function setSchoolBlock(i, k, v) {
+    setForm(f => ({
+      ...f,
+      schoolBlocks: f.schoolBlocks.map((b, idx) => idx === i ? { ...b, [k]: v } : b)
+    }));
+  }
+  function removeSchoolBlock(i) {
+    setForm(f => ({ ...f, schoolBlocks: f.schoolBlocks.filter((_, idx) => idx !== i) }));
+  }
+
+  // ----- VALIDACIONES -----
+  function validateBeforeSave(payload) {
+    // 1) coherencia de bloques escolares: from<=to y start<end
+    for (const b of payload.schoolBlocks) {
+      if (b.toDay < b.fromDay) {
+        alert('En el horario escolar, el día final no puede ser anterior al inicial.');
+        return false;
+      }
+      if (b.endMin <= b.startMin) {
+        alert('En el horario escolar, la hora fin debe ser mayor que la de inicio.');
+        return false;
+      }
+    }
+    // 2) cada extraescolar no puede solapar con ningún tramo escolar
+    for (const ex of payload.extras) {
+      const exStart = ex.startMin;
+      const exEnd = ex.startMin + ex.durMin;
+      for (const b of payload.schoolBlocks) {
+        const coveredDays = daySpan(b.fromDay, b.toDay);
+        if (coveredDays.includes(ex.dayOfWeek)) {
+          if (intervalsOverlap(exStart, exEnd, b.startMin, b.endMin)) {
+            const msg = `La actividad "${ex.label||'Extraescolar'}" `
+              + `(${DAY_LABEL[ex.dayOfWeek]} ${toHHMM(ex.startMin)}–${toHHMM(exEnd)}) `
+              + `se solapa con el horario escolar (${DAY_LABEL[b.fromDay]}–${DAY_LABEL[b.toDay]} `
+              + `${toHHMM(b.startMin)}–${toHHMM(b.endMin)}).`;
+            alert(msg);
+            return false;
+          }
+        }
+      }
+    }
+    return true;
+  }
 
   async function save() {
     const payload = {
       ...form,
       desiredHours: form.desiredHours ? Number(form.desiredHours) : null,
-      extras: (form.extras||[]).map(e => ({
-        label: e.label,
-        dayOfWeek: Number(e.dayOfWeek),
-        startMin: Number(e.startMin),
-        durMin: Number(e.durMin),
-      })),
+      // Convertimos endMin -> durMin para la API/BD
+      extras: (form.extras||[]).map(e => {
+        const start = Number(e.startMin);
+        const end   = Number(e.endMin);
+        const dur   = end - start;
+        if (!(start >= 0) || !(end >= 0) || dur <= 0) {
+          throw new Error('Cada extraescolar debe tener hora fin posterior a la hora inicio.');
+        }
+        return {
+          label: e.label,
+          dayOfWeek: Number(e.dayOfWeek),
+          startMin: start,
+          durMin: dur,
+        };
+      }),
       subjects: (form.subjects||[]).map(s => ({ name: s.name })),
+      schoolBlocks: (form.schoolBlocks||[]).map(b => ({
+        fromDay: Number(b.fromDay),
+        toDay: Number(b.toDay),
+        startMin: Number(b.startMin),
+        endMin: Number(b.endMin),
+      })),
+    schoolSchedule: undefined,
     };
+    if (!validateBeforeSave(payload)) return;
     const res = await fetch(initial?.id ? `/api/students/${initial.id}` : '/api/students', {
       method: initial?.id ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -98,11 +208,11 @@ function StudentForm({ initial, onCancel, onSaved }) {
             <input value={form.address||''} onChange={e=>setField('address', e.target.value)} className={styles.input}/>
           </div>
           <div className={styles.formRow}>
-            <label className={styles.label}>Nombre padre/madre/tutor</label>
+            <label className={styles.label}>Nombre padre/madre</label>
             <input value={form.guardianName||''} onChange={e=>setField('guardianName', e.target.value)} className={styles.input}/>
           </div>
           <div className={styles.formRow}>
-            <label className={styles.label}>Teléfono padre/madre/tutor</label>
+            <label className={styles.label}>Teléfono padre/madre</label>
             <input value={form.guardianPhone||''} onChange={e=>setField('guardianPhone', e.target.value)} className={styles.input}/>
           </div>
           <div className={styles.formRow}>
@@ -117,10 +227,65 @@ function StudentForm({ initial, onCancel, onSaved }) {
             <label className={styles.label}>Especialidad (si es Bachiller)</label>
             <input value={form.specialty||''} onChange={e=>setField('specialty', e.target.value)} placeholder="Ciencias / Humanidades..." className={styles.input}/>
           </div>
+
+          {/* HORARIO ESCOLAR NUEVO */}
           <div className={`${styles.formRow} ${styles.span2}`}>
-            <label className={styles.label}>Horario escolar (texto)</label>
-            <textarea value={form.schoolSchedule||''} onChange={e=>setField('schoolSchedule', e.target.value)} className={styles.textarea} rows={2} />
+            <div className={styles.rowHeader}>
+              <label className={styles.label}>Horario escolar</label>
+              <button onClick={addSchoolBlock} className={styles.linkButton}>Añadir tramo</button>
+            </div>
+            <div className={styles.extrasList}>
+              {(form.schoolBlocks||[]).map((b, i) => (
+                <div key={i} className={styles.extraRow}>
+                  <div className={`${styles.col} ${styles.col3}`}>
+                    <label className={styles.smallLabel}>De (día)</label>
+                    <select value={b.fromDay} onChange={e=>setSchoolBlock(i,'fromDay', Number(e.target.value))} className={styles.select}>
+                      {DAYS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+                    </select>
+                  </div>
+                  <div className={`${styles.col} ${styles.col3}`}>
+                    <label className={styles.smallLabel}>A (día)</label>
+                    <select value={b.toDay} onChange={e=>setSchoolBlock(i,'toDay', Number(e.target.value))} className={styles.select}>
+                      {DAYS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+                    </select>
+                  </div>
+                  <div className={`${styles.col} ${styles.col2}`}>
+                    <label className={styles.smallLabel}>Inicio (HH:MM)</label>
+                    <input type="time" value={toHHMM(b.startMin)} onChange={e=>setSchoolBlock(i,'startMin', toMinutes(e.target.value))} className={styles.input}/>
+                  </div>
+                  <div className={`${styles.col} ${styles.col2}`}>
+                    <label className={styles.smallLabel}>Fin (HH:MM)</label>
+                    <input type="time" value={toHHMM(b.endMin)} onChange={e=>setSchoolBlock(i,'endMin', toMinutes(e.target.value))} className={styles.input}/>
+                  </div>
+                  <div className={`${styles.col} ${styles.col1}`}>
+                    <button onClick={()=>removeSchoolBlock(i)} className={styles.btn}>✕</button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
+
+          {/* ASIGNATURAS */}
+          <div className={`${styles.formRow} ${styles.span2}`}>
+            <label className={styles.label}>Asignaturas que quiere cursar</label>
+            <div className={styles.subjectsChecklist}>
+              {SUBJECT_OPTIONS.map(opt => {
+                const checked = (form.subjects||[]).some(s => s.name === opt);
+                return (
+                  <label key={opt} className={styles.checkItem}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={()=>toggleSubject(opt)}
+                    />
+                    <span>{opt}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* “¿Cómo nos conoces?” y horas deseadas */}
           <div className={styles.formRow}>
             <label className={styles.label}>¿Cómo nos conoces?</label>
             <select value={form.referralSource||''} onChange={e=>setField('referralSource', e.target.value)} className={styles.select}>
@@ -139,58 +304,42 @@ function StudentForm({ initial, onCancel, onSaved }) {
                 className={styles.input}
             />
             </div>
-
-            <div className={`${styles.formRow} ${styles.span2}`}>
-            <div className={styles.rowHeader}>
-                <label className={styles.label}>Asignaturas que quiere cursar</label>
-                <button onClick={addSubject} className={styles.linkButton}>Añadir asignatura</button>
-            </div>
-            <div className={styles.subjectsList}>
-                {(form.subjects||[]).map((s, i) => (
-                <div key={i} className={styles.subjectRow}>
-                    <input
-                    placeholder="p. ej. Matemáticas"
-                    value={s.name}
-                    onChange={e=>setSubject(i, e.target.value)}
-                    className={styles.input}
-                    />
-                    <button onClick={()=>removeSubject(i)} className={styles.btn}>✕</button>
-                </div>
-                ))}
-            </div>
-            </div>
-
+            
+          {/* EXTRAESCOLARES */}
           <div className={`${styles.formRow} ${styles.span2}`}>
             <div className={styles.rowHeader}>
               <label className={styles.label}>Actividades extraescolares</label>
               <button onClick={addExtra} className={styles.linkButton}>Añadir actividad</button>
             </div>
             <div className={styles.extrasList}>
-              {(form.extras||[]).map((ex, i) => (
-                <div key={i} className={styles.extraRow}>
-                  <div className={`${styles.col} ${styles.col4}`}>
-                    <label className={styles.smallLabel}>Actividad</label>
-                    <input value={ex.label} onChange={e=>setExtra(i,'label', e.target.value)} className={styles.input}/>
+              {(form.extras||[]).map((ex, i) => {
+                const end = (Number(ex.endMin ?? Number(ex.startMin||0)+60));
+                return (
+                  <div key={i} className={styles.extraRow}>
+                    <div className={`${styles.col} ${styles.col4}`}>
+                      <label className={styles.smallLabel}>Actividad</label>
+                      <input value={ex.label} onChange={e=>setExtra(i,'label', e.target.value)} className={styles.input}/>
+                    </div>
+                    <div className={`${styles.col} ${styles.col2}`}>
+                      <label className={styles.smallLabel}>Día</label>
+                      <select value={ex.dayOfWeek} onChange={e=>setExtra(i,'dayOfWeek', Number(e.target.value))} className={styles.select}>
+                        {DAYS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+                      </select>
+                    </div>
+                    <div className={`${styles.col} ${styles.col2}`}>
+                      <label className={styles.smallLabel}>Inicio (HH:MM)</label>
+                      <input type="time" value={toHHMM(ex.startMin)} onChange={e=>setExtra(i,'startMin', toMinutes(e.target.value))} className={styles.input}/>
+                    </div>
+                    <div className={`${styles.col} ${styles.col2}`}>
+                      <label className={styles.smallLabel}>Fin (HH:MM)</label>
+                      <input type="time" value={toHHMM(end)} onChange={e=>setExtra(i,'endMin', toMinutes(e.target.value))} className={styles.input}/>
+                    </div>
+                    <div className={`${styles.col} ${styles.col1}`}>
+                      <button onClick={()=>removeExtra(i)} className={styles.btn}>✕</button>
+                    </div>
                   </div>
-                  <div className={`${styles.col} ${styles.col2}`}>
-                    <label className={styles.smallLabel}>Día</label>
-                    <select value={ex.dayOfWeek} onChange={e=>setExtra(i,'dayOfWeek', Number(e.target.value))} className={styles.select}>
-                      {DAYS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
-                    </select>
-                  </div>
-                  <div className={`${styles.col} ${styles.col3}`}>
-                    <label className={styles.smallLabel}>Inicio (HH:MM)</label>
-                    <input type="time" value={toHHMM(ex.startMin)} onChange={e=>setExtra(i,'startMin', toMinutes(e.target.value))} className={styles.input}/>
-                  </div>
-                  <div className={`${styles.col} ${styles.col2}`}>
-                    <label className={styles.smallLabel}>Duración (min)</label>
-                    <input type="number" min={15} step={15} value={ex.durMin} onChange={e=>setExtra(i,'durMin', Number(e.target.value))} className={styles.input}/>
-                  </div>
-                  <div className={`${styles.col} ${styles.col1}`}>
-                    <button onClick={()=>removeExtra(i)} className={styles.btn}>✕</button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
@@ -221,7 +370,7 @@ export default function StudentsPage() {
   useEffect(() => { load(); }, []);
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [q, course]);
 
-  const courses = useMemo(() => Array.from(new Set(students.map(s => s.course))).sort(), [students]);
+  const courses = useMemo(() => Array.from(new Set(students.map(s => s.course))).filter(Boolean).sort(), [students]);
 
   async function onDelete(id) {
     if (!confirm('¿Eliminar alumno?')) return;
@@ -244,24 +393,41 @@ export default function StudentsPage() {
         </div>
         <div className={styles.cardGrid}>
           <div><span className={styles.muted}>Tel:</span> {s.phone || '—'}</div>
-          <div><span className={styles.muted}>Tutor:</span> {s.guardianName || '—'}</div>
-          <div><span className={styles.muted}>Tel tutor:</span> {s.guardianPhone || '—'}</div>
+          <div><span className={styles.muted}>Padre:</span> {s.guardianName || '—'}</div>
+          <div><span className={styles.muted}>Tel Padre:</span> {s.guardianPhone || '—'}</div>
           <div><span className={styles.muted}>Colegio:</span> {s.school || '—'}</div>
           <div className={styles.span2}><span className={styles.muted}>Dirección:</span> {s.address || '—'}</div>
-          <div className={styles.span2}><span className={styles.muted}>Horario escolar:</span> {s.schoolSchedule || '—'}</div>
+          {/* Render del horario escolar estructurado */}
+          {(s.schoolBlocks?.length > 0) ? (
+            <div className={styles.span2}>
+              <span className={styles.muted}>Horario escolar:</span>{' '}
+              <ul className={styles.ul} style={{marginTop: '0.25rem'}}>
+                {s.schoolBlocks.map((b, idx) => (
+                  <li key={b.id || idx}>
+                    {DAY_LABEL[b.fromDay]}{b.fromDay!==b.toDay ? `–${DAY_LABEL[b.toDay]}` : ''} · {toHHMM(b.startMin)}–{toHHMM(b.endMin)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <div className={styles.span2}><span className={styles.muted}>Horario escolar:</span> —</div>
+          )}
           <div><span className={styles.muted}>Nos conoces por:</span> {s.referralSource || '—'}</div>
           <div><span className={styles.muted}>Horas deseadas:</span> {s.desiredHours ?? '—'}</div>
-
+        
         </div>
         {(s.extras?.length > 0) && (
           <div className={styles.cardExtras}>
             <div className={styles.cardExtrasTitle}>Extraescolares</div>
             <ul className={styles.ul}>
-              {s.extras.map(ex => (
-                <li key={ex.id}>
-                  {['','Lun','Mar','Mié','Jue','Vie','Sáb','Dom'][ex.dayOfWeek]} · {String(Math.floor(ex.startMin/60)).padStart(2,'0')}:{String(ex.startMin%60).padStart(2,'0')} · {ex.durMin}m — {ex.label}
-                </li>
-              ))}
+              {s.extras.map(ex => {
+                const end = ex.startMin + ex.durMin;
+                return (
+                  <li key={ex.id || `${ex.dayOfWeek}-${ex.startMin}-${ex.durMin}`}>
+                    {DAY_LABEL[ex.dayOfWeek]} · {toHHMM(ex.startMin)}–{toHHMM(end)} — {ex.label}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}

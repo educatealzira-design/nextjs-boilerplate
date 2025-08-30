@@ -74,6 +74,7 @@ export default function ReceiptsPage(){
 
   // estados editables en UI (reflejan invoices si existen)
   const [rates, setRates] = useState({});
+  const [paymentMethod, setPaymentMethod] = useState({});
   const [adjustMin, setAdjustMin] = useState({});
   const [status, setStatus] = useState({});    // PENDIENTE / ENVIADO / PAGADO
   const debounceTimer = useRef(null);
@@ -87,7 +88,7 @@ export default function ReceiptsPage(){
     ]).then(([s,l,inv])=>{
       setStudents(s); setLessons(l); setInvoices(Array.isArray(inv)?inv:[]);
       // hidratar UI desde invoices o desde datos por defecto
-      const r={}, a={}, st={};
+      const r={}, a={}, st={}, pm={};
       for(const it of inv){
         const stFromList = s.find(x=>x.id===it.studentId);
         const byCourse = defaultRateForCourse(stFromList?.course);
@@ -97,6 +98,7 @@ export default function ReceiptsPage(){
         r[it.studentId]  = typeof it.rate==='number' ? it.rate : (fromDb ?? byCourse);
         a[it.studentId]  = it.adjustMin ?? 0;
         st[it.studentId] = it.status || "PENDIENTE";
+        pm[it.studentId] = it.paymentMethod || "Transfer.";
       }
       // fallback para alumnos sin invoice previa
       for(const stn of s){
@@ -106,8 +108,9 @@ export default function ReceiptsPage(){
         if (r[stn.id]==null) r[stn.id] = fromDb ?? byCourse; // aplica tarifa estándar si no hay BD
         if (a[stn.id]==null) a[stn.id]=0;
         if (!st[stn.id]) st[stn.id]="PENDIENTE";
+        if (!pm[stn.id]) pm[stn.id] = "Transfer.";
       }
-      setRates(r); setAdjustMin(a); setStatus(st);
+      setRates(r); setAdjustMin(a); setStatus(st); setPaymentMethod(pm);
     }).catch((e)=>{
       console.error("Error cargando datos", e);
       setInvoices([]); // evitar crashear si la ruta falla
@@ -150,7 +153,8 @@ export default function ReceiptsPage(){
       const inv = invoices.find(i=>i.studentId===st.id);
       const invId = inv?.id || null;
       const stStatus = status[st.id] || inv?.status || "PENDIENTE";
-      out.push({ student:st, invoiceId:invId, items, totalMinPlan: total, totalMin, rate, amount, stStatus });
+      const method = (paymentMethod[st.id] ?? inv?.paymentMethod ?? "Transfer.");
+      out.push({ student:st, invoiceId:invId, items, totalMinPlan: total, totalMin, rate, amount, stStatus, method, });
     }
 
     const t = q.toLowerCase();
@@ -161,7 +165,7 @@ export default function ReceiptsPage(){
     filtered.sort((a,b)=> a.student.fullName.localeCompare(b.student.fullName, "es"));
     return filtered;
   }, [students, lessons, invoices, month, q, onlyWithLessons, rates, adjustMin, status]);
-
+  
   const totals = useMemo(()=>{
     const min = rows.reduce((acc,r)=> acc + r.totalMin, 0);
     const eur = rows.reduce((acc,r)=> acc + r.amount, 0);
@@ -179,7 +183,8 @@ export default function ReceiptsPage(){
         adjustMin: adjustMin[row.student.id] ?? 0,
         totalMin: row.totalMin,
         amount: row.amount,
-        status: status[row.student.id] || "PENDIENTE"
+        status: status[row.student.id] || "PENDIENTE",
+        paymentMethod: paymentMethod[row.student.id] || "Transfer."
       };
       const res = await fetch('/api/invoices', {
         method:'POST',
@@ -198,39 +203,139 @@ export default function ReceiptsPage(){
     }, 300);
   }
 
-  // PDF minimal (solo si PAGADO)
-  async function makePaidPdf(row, month){
-    const [{ default: jsPDF }] = await Promise.all([ import("jspdf") ]);
-    const doc = new jsPDF({ unit:"pt", format:"a4" });
-    const margin = 72; let y = margin;
+  // -------- RECIBO PDF minimal (solo si PAGADO) --------
+  // Carga una imagen (logo) y la devuelve como DataURL; si falla, devuelve null
+  async function loadImageAsDataURL(url){
+    try{
+      const res = await fetch(url);
+      const blob = await res.blob();
+      return await new Promise((resolve, reject)=>{
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    }catch{
+      return null;
+    }
+  }
 
-    const add = (t, size=16, bold=false, gap=12)=>{
-        doc.setFont("helvetica", bold?"bold":"normal");
+  async function makePaidPdf(row, month, opts = {}){
+    const logoUrl = opts.logoUrl || "/logo.png";
+
+    const { default: jsPDF } = await import("jspdf");
+    const doc = new jsPDF({ unit:"pt", format:"a4" });
+
+    // Tokens de estilo
+    const margin = 64;
+    const primary = "#0f172a";   // slate-900
+    const muted   = "#64748b";   // slate-500
+    const border  = "#e5e7eb";   // gray-200
+    const accent  = "#16a34a";   // green-600
+    const soft    = "#f3f4f6";   // gray-100
+
+    let y = margin;
+
+    // Helpers de texto
+    const T = {
+      set(size, bold=false, color=primary){
+        doc.setFont("helvetica", bold? "bold":"normal");
         doc.setFontSize(size);
-        doc.text(t, margin, y);
-        y += size + gap;
+        doc.setTextColor(color);
+      },
+      text(t, x, yy){ doc.text(t, x, yy); },
     };
 
-    add("RECIBO EDÚCATE", 20, true, 20);
-    add(`Alumno: ${row.student.fullName}`, 12, false, 8);
-    add(`Mensualidad ${fmtMonthHuman(month)}: ${fmtMoney(row.amount)}`, 14, true, 24);
-    add("PAGADO, muchas gracias.", 16, true, 0);
+    // Cabecera con logo y título
+    const logoDataUrl = await loadImageAsDataURL(logoUrl);
+    const headerH = 56;
+
+    // banda superior
+    doc.setFillColor(soft);
+    doc.roundedRect(0, 0, doc.internal.pageSize.getWidth(), 24, 0, 0, "F");
+
+    if (logoDataUrl){
+      doc.addImage(logoDataUrl, "PNG", margin, y-8, 120, 40, undefined, "FAST");
+    }
+
+    T.set(22, true, primary);
+
+    // badge del mes
+    const monthLabel = `Mensualidad ${fmtMonthHuman(month)}`;
+    const badgeW = doc.getTextWidth(monthLabel) + 18;
+    doc.setFillColor("#eef2ff");
+    doc.setDrawColor("#c7d2fe");
+    doc.roundedRect(doc.internal.pageSize.getWidth() - margin - badgeW, y-16, badgeW, 28, 8, 8, "FD");
+    T.set(12, true, "#3730a3");
+    doc.text(monthLabel, doc.internal.pageSize.getWidth() - margin - badgeW + 9, y+4);
+
+    y += headerH;
+
+    // Caja importe pagado
+    const amountStr = fmtMoney(row.amount);
+    doc.setDrawColor(border);
+    doc.setFillColor("#ecfdf5");
+    doc.roundedRect(margin, y, doc.internal.pageSize.getWidth()-2*margin, 70, 12, 12, "FD");
+    T.set(12, false, muted);
+    doc.text("Importe pagado", margin+14, y+24);
+    T.set(28, true, accent);
+    doc.text(amountStr, margin+14, y+54);
+
+    y += 90;
+
+    // Datos alumno y metadatos
+    const leftW  = (doc.internal.pageSize.getWidth()-2*margin)*0.55;
+    const rightW = (doc.internal.pageSize.getWidth()-2*margin)*0.45;
+
+    // Alumno
+    T.set(12, true, primary); doc.text("Alumno", margin+14, y+20);
+    T.set(14, true, primary); doc.text(row.student.fullName, margin+14, y+42);
+    T.set(11, false, muted);
+    const methodForPdf =
+      (row.method && row.method.trim()) ||
+      (paymentMethod && paymentMethod[row.student.id]) ||
+      "Transfer."; // fallback
+
+    // Normalizamos a frase bonita
+    const prettyMap = { "Transfer.": "transferencia", "Efectivo": "efectivo", "Bizum": "Bizum" };
+    const prettyMethod = prettyMap[methodForPdf] || methodForPdf;
+
+    doc.text(`Pagado por ${prettyMethod}`, margin+14, y+80);
+
+    // Marca de agua PAGADO
+    doc.saveGraphicsState();
+    doc.setGState(new doc.GState({ opacity: 0.08 }));
+    T.set(90, true, accent);
+    doc.text("PAGADO", doc.internal.pageSize.getWidth()/2, doc.internal.pageSize.getHeight()/2, {
+      angle: -35, align: "center"
+    });
+    doc.restoreGraphicsState();
+
+    // Pie
+    const footerY = doc.internal.pageSize.getHeight() - 36;
+    T.set(10,false,muted);
+    doc.text("Muchas gracias.", margin, footerY);
 
     return doc.output("blob");
   }
 
-  async function downloadPaidPdf(row, month, currentStatus){
+
+  async function downloadPaidPdf(row, month, currentStatus, logoUrl="/logo.png"){
     if (currentStatus !== "PAGADO") {
-        alert("Sólo disponible cuando el estado es PAGADO.");
-        return;
+      alert("Sólo disponible cuando el estado es PAGADO.");
+      return;
     }
-    const blob = await makePaidPdf(row, month);
+    const blob = await makePaidPdf(row, month, { logoUrl });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = `Recibo-Pagado-${row.student.fullName.replace(/\s+/g,"_")}-${month}.pdf`;
-    document.body.appendChild(a); a.click(); a.remove();
+    a.href = url;
+    a.download = `Recibo-Pagado-${row.student.fullName.replace(/\s+/g,"_")}-${month}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
     URL.revokeObjectURL(url);
   }
+
 
   function openWhatsappCharge(row){
     const txt = `Hola ${row.student.fullName}, la mensualidad de este mes son ${fmtMoney(row.amount)}.\nMuchas gracias.`;
@@ -258,6 +363,12 @@ export default function ReceiptsPage(){
     }
   }
 
+  function onChangePaymentMethod(studentId, val){
+    setPaymentMethod(prev=>({ ...prev, [studentId]: val }));
+    const row = rows.find(r=>r.student.id===studentId);
+    if (row) queueSave({ ...row, method: val });
+  }
+
   function onChangeAdj(studentId, val){
     const num = Number(val);
     setAdjustMin(prev=>({ ...prev, [studentId]: num }));
@@ -277,19 +388,35 @@ export default function ReceiptsPage(){
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <div>
-          <h1 className={styles.title}>Recibos mensuales</h1>
-          <div className={styles.row}>
-            <Link href="/" className={styles.btnOutline}>← Volver al horario</Link>
-            <Link href="/send" className={styles.btnOutline}>WhatsApp (horarios)</Link>
-            <Link href="/invoices" className={styles.btnPrimary}>WhatsApp (cobros)</Link>
+        <div className={styles.headerRow}>
+          {/* Izquierda: título */}
+          <div className={styles.titleLeft}>
+            <img src="/logo.png" alt="Edúcate" className={styles.logo}/>
           </div>
-        </div>
-        <div className={styles.actions}>
-          <label className={styles.label}>Mes</label>
-          <input type="month" value={month} onChange={e=>setMonth(e.target.value)} className={styles.input}/>
-          <input placeholder="Buscar nombre o curso..." value={q} onChange={e=>setQ(e.target.value)} className={styles.input} />
-          <label className={styles.chk}><input type="checkbox" checked={onlyWithLessons} onChange={e=>setOnlyWithLessons(e.target.checked)} /> Sólo con clases</label>
+
+          {/* Derecha: botones + filtros */}
+          <div className={styles.controls}>
+            <div className={styles.controlsGroup}>
+              <Link href="/" className={styles.btnOutline}>← Volver al horario</Link>
+              <Link href="/invoices" className={styles.btnPrimary}>WhatsApp (cobros)</Link>
+            </div>
+
+            <div className={styles.controlsGroup}>
+              <label className={styles.label}>Mes</label>
+              <input
+                type="month"
+                value={month}
+                onChange={e=>setMonth(e.target.value)}
+                className={styles.input}
+              />
+              <input
+                placeholder="Buscar nombre o curso..."
+                value={q}
+                onChange={e=>setQ(e.target.value)}
+                className={styles.input}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -300,11 +427,11 @@ export default function ReceiptsPage(){
               <th>Alumno</th>
               <th>Curso</th>
               <th className={styles.right}>Clases</th>
-              <th className={styles.right}>Min</th>
               <th className={styles.right}>Horas</th>
               <th className={styles.right}>Tarifa (€/h)</th>
               <th className={styles.right}>Ajuste (min)</th>
               <th className={styles.right}>Importe</th>
+              <th>Método</th>
               <th>Estado</th>
               <th>Acciones</th>
             </tr>
@@ -312,92 +439,127 @@ export default function ReceiptsPage(){
           <tbody>
             {rows.map(r=>{
               const classesCount = r.items.reduce((acc,it)=> acc + it.count, 0);
+              const statusClass =
+                  (status[r.student.id] || r.stStatus) === "PAGADO" ? styles.rowPaid :
+                  (status[r.student.id] || r.stStatus) === "ENVIADO" ? styles.rowSent :
+                  "";
               return (
-                <tr key={r.student.id}>
-                  <td>
-                    <div className={styles.name}>{r.student.fullName}</div>
-                    {/* desglose opcional */}
-                    {r.items.length>0 && (
-                      <details className={styles.details}>
-                        <summary>Ver desglose</summary>
-                        <ul className={styles.ul}>
-                          {r.items.map((it, idx)=> (
-                            <li key={idx}>
-                              <strong>{DOW_LABEL[it.dow]}</strong> · {toHHMM(it.startMin)} · {it.durMin}m × {it.count}
-                            </li>
-                          ))}
-                        </ul>
-                      </details>
-                    )}
-                  </td>
-                  <td>{r.student.course}</td>
-                  <td className={styles.right}>{classesCount}</td>
-                  <td className={styles.right}>{r.totalMin}</td>
-                  <td className={styles.right}>{(r.totalMin/60).toFixed(2)}</td>
-                  <td className={styles.right}>
-                    <input type="number" min={0} step={1} className={styles.inputNum}
-                      value={r.rate}
-                      onChange={e=> onChangeRate(r.student.id, e.target.value) }
-                    />
-                  </td>
-                  <td className={styles.right}>
-                    <input type="number" step={15} className={styles.inputNum}
-                      value={adjustMin[r.student.id]??0}
-                      onChange={e=> onChangeAdj(r.student.id, e.target.value) }
-                    />
-                  </td>
-                  <td className={styles.right}>{fmtMoney(r.amount)}</td>
-                  <td>
-                    <select className={styles.select}
-                      value={status[r.student.id] || r.stStatus || "PENDIENTE"}
-                      onChange={e=> onChangeStatus(r.student.id, e.target.value)}
-                    >
-                      {STATUSES.map(s=> <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </td>
-                  <td>
-                    <div className={styles.rowButtons}>
+                  <tr key={r.student.id} className={statusClass}>
+                    <td>
+                      <div className={styles.nameRow}>
+                        <div className={styles.name}>{r.student.fullName}</div>
+                        <span className={`${styles.statusPill} ${
+                          (status[r.student.id] || r.stStatus) === "PAGADO" ? styles.paid :
+                          (status[r.student.id] || r.stStatus) === "ENVIADO" ? styles.sent :
+                          styles.pending
+                        }`}>
+                          {status[r.student.id] || r.stStatus || "PENDIENTE"}
+                        </span>
+                      </div>
+
+                      {r.items.length>0 && (
+                        <details className={styles.details}>
+                          <summary>Ver desglose</summary>
+                          <ul className={styles.ul}>
+                            {r.items.map((it, idx)=> (
+                              <li key={idx}>
+                                <strong>{DOW_LABEL[it.dow]}</strong> · {toHHMM(it.startMin)} · {it.durMin}m × {it.count}
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
+                    </td>
+                    <td className={styles.muted}>{r.student.course}</td>
+                    <td className={styles.right}>{r.items.reduce((acc,it)=> acc + it.count, 0)}</td>
+                    <td className={styles.right}>{(r.totalMin/60).toFixed(2)}</td>
+                    <td className={styles.right}>
+                      <input
+                        type="number" min={0} step={1}
+                        className={styles.inputNum}
+                        value={r.rate}
+                        onChange={e=> onChangeRate(r.student.id, e.target.value) }
+                      />
+                    </td>
+
+                    <td className={styles.right}>
+                      <input
+                        type="number" step={15}
+                        className={styles.inputNum}
+                        value={adjustMin[r.student.id]??0}
+                        onChange={e=> onChangeAdj(r.student.id, e.target.value) }
+                      />
+                    </td>
+
+                    <td className={`${styles.right} ${styles.colAmount}`}>
+                      <span className={styles.amountNowrap}>{fmtMoney(r.amount)}</span>
+                    </td>
+
+                    <td className={styles.colMethod}>
+                      <select
+                        className={`${styles.select} ${styles.selectSm}`}
+                        value={paymentMethod[r.student.id] || r.method || "Transfer."}
+                        onChange={e=> onChangePaymentMethod(r.student.id, e.target.value)}
+                      >
+                        <option>Transfer.</option>
+                        <option>Efectivo</option>
+                        <option>Bizum</option>
+                      </select>
+                    </td>
+
+                    <td>
+                      <select
+                        className={styles.select}
+                        value={status[r.student.id] || r.stStatus || "PENDIENTE"}
+                        onChange={e=> onChangeStatus(r.student.id, e.target.value)}
+                      >
+                        {STATUSES.map(s=> <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </td>
+
+                    <td>
+                      <div className={styles.rowButtons}>
                         <button
-                        className={styles.btn}
-                        onClick={async ()=>{
+                          className={styles.btn}
+                          onClick={async ()=>{
                             try {
-                            await navigator.clipboard.writeText(buildChargeMessage(r));
-                            // Marca como ENVIADO y persiste (usa tu onChangeStatus -> queueSave)
-                            onChangeStatus(r.student.id, "ENVIADO");
-                            alert("Mensaje copiado y marcado como ENVIADO");
+                              await navigator.clipboard.writeText(buildChargeMessage(r));
+                              onChangeStatus(r.student.id, "ENVIADO");
                             } catch {
-                            alert("No se pudo copiar");
+                              alert("No se pudo copiar");
                             }
-                        }}
+                          }}
                         >
-                        Copiar
+                          Copiar
                         </button>
 
                         <button
-                        className={styles.btn}
-                        onClick={()=> {
+                          className={styles.btn}
+                          onClick={()=>{
                             const current = (status[r.student.id] || r.stStatus || "PENDIENTE");
                             downloadPaidPdf(r, month, current);
-                        }}
+                          }}
                         >
-                        PDF (Pagado)
+                          PDF (Pagado)
                         </button>
-                    </div>
-                </td>
-                </tr>
-              );
-            })}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td colSpan={3}><strong>Totales</strong></td>
-              <td className={styles.right}><strong>{totals.min}</strong></td>
-              <td className={styles.right}><strong>{(totals.min/60).toFixed(2)}</strong></td>
-              <td></td><td></td>
-              <td className={styles.right}><strong>{fmtMoney(totals.eur)}</strong></td>
-              <td></td><td></td>
-            </tr>
-          </tfoot>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={3}><strong>Totales</strong></td>
+                <td className={styles.right}><strong>{(totals.min/60).toFixed(2)}</strong></td> {/* Horas */}
+                <td></td>   {/* Tarifa */}
+                <td></td>   {/* Ajuste */}
+                <td className={`${styles.right} ${styles.colAmount}`}><strong>{fmtMoney(totals.eur)}</strong></td> {/* Importe */}
+                <td></td>   {/* Método */}
+                <td></td>   {/* Estado */}
+                <td></td>   {/* Acciones */}
+              </tr>
+            </tfoot>
         </table>
       </div>
     </div>

@@ -4,7 +4,7 @@ import prisma from "@/lib/prisma";
 export async function GET(_req, { params }) {
   const s = await prisma.student.findUnique({
     where: { id: params.id },
-    include: { extras: true, subjects: true },
+    include: { extras: true, subjects: true, schoolBlocks: true },
   });
   if (!s) return NextResponse.json({ error: "not found" }, { status: 404 });
   return NextResponse.json(s);
@@ -86,6 +86,21 @@ export async function PUT(req, { params }) {
           },
         }
       : {}),
+    
+      // SchoolBlocks: si llega array, reemplaza todos
+      ...(Array.isArray(body.schoolBlocks)
+      ? {
+          schoolBlocks: {
+            deleteMany: {}, // borra todos los bloques actuales
+            create: body.schoolBlocks.map((b) => ({
+              fromDay: Number(b.fromDay),
+              toDay: Number(b.toDay),
+              startMin: Number(b.startMin),
+              endMin: Number(b.endMin),
+            })),
+          },
+        }
+      : {}),
   };
 
   if (Object.keys(data).length === 0) {
@@ -99,7 +114,7 @@ export async function PUT(req, { params }) {
     const updated = await prisma.student.update({
       where: { id: params.id },
       data,
-      include: { extras: true, subjects: true },
+      include: { extras: true, subjects: true, schoolBlocks: true },
     });
     return NextResponse.json(updated);
   } catch (err) {

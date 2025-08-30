@@ -66,7 +66,7 @@
 /* contador asignadas (pastilla pequeña arriba dcha) */
 .assignedBadge{
   position:absolute; top:6px; right:6px;
-  background:#4b4b4b; color:#fff; border-radius:999px; padding:2px 8px; font-size:11px; font-weight:700;
+  background:#1fe218; color:#ffffff; border-radius:999px; padding:2px 8px; font-size:11px; font-weight:700;
 }
 
 /* ======= TABLERO ======= */
@@ -94,6 +94,16 @@
 }
 .teacherChip{
   display:inline-block; padding:0; background:transparent; color:#111; font-weight:600;
+}
+
+/* Fila Nuria: fondo muy suave verde */
+.rowNuria {
+  color: #6c986c; /* verde muy claro */
+}
+
+/* Fila Santi: fondo suave azul */
+.rowSanti {
+  color: #5175ab; /* azul muy claro */
 }
 
 /* Primera columna de horas (pegada a la izq) */
@@ -197,6 +207,7 @@
 /* page.module.css */
 .weekBadge { padding:6px 10px; border-radius:8px; background:#f3f4f6; font-size:12px; }
 .savedPill { margin-left:8px; padding:2px 6px; border-radius:9999px; background:#16a34a; color:#fff; font-weight:600; font-size:11px; }
+
 
 
 

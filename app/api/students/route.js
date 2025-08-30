@@ -23,7 +23,7 @@ export async function GET(req) {
 
   const students = await prisma.student.findMany({
     where,
-    include: { extras: true, subjects: true },
+    include: { extras: true, subjects: true, schoolBlocks: true },
     orderBy: { fullName: "asc" },
   });
   return NextResponse.json(students);
@@ -59,8 +59,17 @@ export async function POST(req) {
           name: s.name,
         })),
       },
+      schoolBlocks: {
+        create: (body.schoolBlocks || []).map((b) => ({
+          fromDay: Number(b.fromDay),
+          toDay: Number(b.toDay),
+          startMin: Number(b.startMin),
+          endMin: Number(b.endMin),
+        })),
+      },
+      
     },
-    include: { extras: true, subjects: true },
+    include: { extras: true, subjects: true, schoolBlocks: true },
   });
 
   return NextResponse.json(created, { status: 201 });

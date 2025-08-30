@@ -2,6 +2,7 @@
   max-width:1120px;
   margin:0 auto;
   padding:16px;
+  
 }
 
 .header{
@@ -24,8 +25,9 @@
 .input, .select{
   border:1px solid var(--border);
   border-radius: var(--radius);
-  padding:8px 12px;
+  padding:8px 8px;
   font: inherit;
+  background:#f3f0ed;
 }
 .btn{
   padding:8px 12px;
@@ -68,11 +70,11 @@
 }
 
 .card{
-  background:#fff;
-  border:1px solid var(--border);
+  background:#f3f0ed;
+  border:3px solid var(--border);
   border-radius: var(--radius);
   padding:12px;
-  box-shadow: 0 1px 1px rgba(0,0,0,.04);
+  box-shadow: 0 1px 1px rgba(96, 36, 36, 0.04);
   display:flex;
   flex-direction:column;
   gap:8px;
@@ -81,8 +83,8 @@
   display:flex; align-items:flex-start; justify-content:space-between; gap:8px;
 }
 .cardTitle{ font-size:18px; font-weight:600; }
-.cardSubtitle{ font-size:12px; color:var(--muted); }
-.cardActions{ display:flex; gap:8px; }
+.cardSubtitle{ font-size:16px; font-weight:600; color:var(--muted); color: #0bbb54; }
+.cardActions{ display:flex; gap:6px; font-size:14px;}
 
 .cardGrid{
   display:grid;
@@ -104,12 +106,12 @@
   padding:16px; z-index:50;
 }
 .modal{
-  background:#fff;
+  background:#ffffff;
   width:100%; max-width: 768px;
   max-height: 90vh;
   border-radius: 16px;
   overflow:auto;
-  box-shadow: 0 10px 30px rgba(0,0,0,.2);
+  box-shadow: 0 10px 30px rgba(202, 202, 202, 0.2);
 }
 .modalHeader{
   padding:12px 16px;
@@ -154,13 +156,15 @@
 }
 @media (min-width:768px){
   .extraRow{
-    grid-template-columns: repeat(12, 1fr);
+    grid-template-columns: repeat(12, minmax(0,1fr));
+    align-items:center; /* centra verticalmente los campos */
   }
   .col{ }
   .col1{ grid-column: span 1; }
   .col2{ grid-column: span 2; }
   .col3{ grid-column: span 3; }
   .col4{ grid-column: span 4; }
+  .extraRow .col1{ justify-self:end; }
 }
 
 .modalFooter{
@@ -186,3 +190,24 @@
   .subjectRow{ grid-template-columns: 1fr 100px; }
 }
 
+
+/* Checklist de asignaturas */
+.subjectsChecklist{
+  display:grid;
+  gap:8px;
+  grid-template-columns: 1fr 1fr;
+}
+@media (min-width:768px){
+  .subjectsChecklist{ grid-template-columns: repeat(3, 1fr); }
+}
+.checkItem{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 10px;
+  border:1px solid var(--border);
+  border-radius: var(--radius);
+  background:#f3f0ed; /* beige como el resto */
+  user-select:none;
+}
+.checkItem input{ margin:0; }

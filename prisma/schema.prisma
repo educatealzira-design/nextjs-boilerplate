@@ -24,7 +24,7 @@ enum Teacher {
 
 
 model Student {
-  id             String            @id @default(cuid())
+  id             String            @id @default(cuid())  @db.Text
   fullName       String
   phone          String?
   address        String?
@@ -42,6 +42,7 @@ model Student {
   subjects       Subject[] 
   lessons        Lesson[]
   invoice        Invoice[]
+  schoolBlocks   SchoolBlock[]
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
   @@index([course])
@@ -64,6 +65,21 @@ model Extracurricular {
   startMin  Int
   durMin    Int
   @@index([studentId, dayOfWeek])
+}
+
+model SchoolBlock {
+  id        String   @id @default(cuid()) @db.Text
+  studentId String   @map("student_id")   @db.Text
+  fromDay   Int      @map("from_day")
+  toDay     Int      @map("to_day")
+  startMin  Int      @map("start_min")
+  endMin    Int      @map("end_min")
+  createdAt DateTime @default(now())      @map("created_at") @db.Timestamptz(6)
+
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, fromDay, toDay])
+  @@map("student_school_blocks")
 }
 
 model WeekState {

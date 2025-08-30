@@ -1,11 +1,9 @@
 "use client";
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import styles from "../send/send.module.css"; // reutilizamos estilos
-const STATUSES = ["PENDIENTE","ENVIADO","PAGADO"];
+import styles from "../send/send.module.css"; // reutiliza el mismo CSS de Enviar horario
 
-function fmtMoney(n){ return new Intl.NumberFormat("es-ES", { style:"currency", currency:"EUR" }).format(n); }
-function waLink(phone, text){ if (!phone) return null; return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`; }
+function fmtMoney(n){ return new Intl.NumberFormat("es-ES", { style:"currency", currency:"EUR" }).format(n ?? 0); }
 function fmtMonthHuman(ym){ const [y,m]=ym.split("-").map(Number); const d=new Date(Date.UTC(y,(m-1),1)); return d.toLocaleDateString("es-ES",{ month:"long", year:"numeric", timeZone:"UTC" }); }
 
 export default function InvoicesSendPage(){
@@ -13,8 +11,10 @@ export default function InvoicesSendPage(){
     const now = new Date(); const y=now.getFullYear(); const m=String(now.getMonth()+1).padStart(2,"0"); return `${y}-${m}`;
   });
   const [items, setItems] = useState([]); // {invoiceId, studentId, fullName, phone, amount, status}
-  const [q, setQ] = useState("");
-  const [onlyWithPhone, setOnlyWithPhone] = useState(true);
+
+  // Tarjetas marcadas como “hecho” (copiado o abierto chat)
+  const [doneIds, setDoneIds] = useState(new Set());
+  const markDone = (id) => setDoneIds(prev => { const next = new Set(prev); next.add(id); return next; });
 
   async function load(){
     const [students, lessons, invoices] = await Promise.all([
@@ -23,7 +23,7 @@ export default function InvoicesSendPage(){
       fetch(`/api/invoices?month=${month}`).then(r=>r.json())
     ]);
 
-    // Calcula importe si no hay invoice aún (misma lógica que en recibos)
+    // Agrupa lecciones por alumno y franja para estimar totalMin si no hay invoice
     const groups = new Map();
     for(const ls of lessons){
       const keyS = ls.studentId;
@@ -38,7 +38,6 @@ export default function InvoicesSendPage(){
       const [y,mm] = month.split("-").map(Number);
       let total=0;
       for(const it of m.values()){
-        // contar cuántos días de ese dow hay en el mes:
         const d=new Date(Date.UTC(y,(mm-1),1));
         let cnt=0;
         while(d.getUTCMonth()===(mm-1)){
@@ -71,20 +70,14 @@ export default function InvoicesSendPage(){
 
   useEffect(()=>{ load(); }, [month]);
 
-  const filtered = useMemo(()=>{
-    const t = q.toLowerCase();
-    return items.filter(it=>{
-      if (onlyWithPhone && !it.phone) return false;
-      return (it.fullName||"").toLowerCase().includes(t);
-    });
-  }, [items, q, onlyWithPhone]);
+  // Igual que "Enviar horario": grid de TODAS las tarjetas (ocultamos las que no tienen teléfono)
+  const filtered = useMemo(()=> items, [items]);
 
   function message(it){
     return `Hola ${it.fullName}, la mensualidad de este mes son ${fmtMoney(it.amount)}.\nMuchas gracias.`;
   }
 
   async function setStatus(it, newStatus){
-    // si existe invoice, PATCH; si no, creamos una mínima
     if (it.invoiceId){
       const r = await fetch(`/api/invoices/${it.invoiceId}`, {
         method:'PATCH', headers:{'Content-Type':'application/json'},
@@ -94,7 +87,6 @@ export default function InvoicesSendPage(){
         setItems(prev=> prev.map(x=> x.studentId===it.studentId ? { ...x, status: newStatus } : x));
       }
     } else {
-      // creación mínima con estado
       const created = await fetch('/api/invoices', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
@@ -108,80 +100,81 @@ export default function InvoicesSendPage(){
         })
       });
       if (created.ok){
-        const [rec] = await created.json();
-        setItems(prev=> prev.map(x=> x.studentId===it.studentId ? { ...x, status: newStatus, invoiceId: rec.id } : x));
+        const data = await created.json();
+        const rec = Array.isArray(data) ? data[0] : data;
+        setItems(prev=> prev.map(x=> x.studentId===it.studentId ? { ...x, status: newStatus, invoiceId: rec?.id ?? x.invoiceId } : x));
       }
     }
   }
 
   return (
-    <div className={styles.container}>
+    <div className={styles.layout}>
+      {/* === CABECERA: logo a la izquierda, botones a la derecha (igual que Enviar horario) === */}
       <div className={styles.header}>
-        <div>
-          <h1 className={styles.title}>WhatsApp (cobros)</h1>
-          <p className={styles.subtitle}>Mensajes de cobro por alumno para {fmtMonthHuman(month)}.</p>
-          <div className={styles.row}>
-            <Link href="/receipts" className={styles.btnOutline}>← Recibos</Link>
-            <Link href="/" className={styles.btnOutline}>Horario</Link>
-            <a href="https://web.whatsapp.com/" target="_blank" rel="noopener noreferrer" className={styles.btnPrimary}>
-              Abrir WhatsApp Web
-            </a>
-          </div>
+        <div className={styles.title}>
+          <img src="/logo.png" alt="Edúcate" style={{ height:'70px', width:'auto'}}/>
         </div>
-        <div className={styles.actions}>
-          <input type="month" value={month} onChange={e=>setMonth(e.target.value)} className={styles.input}/>
-          <input className={styles.input} placeholder="Buscar alumno..." value={q} onChange={e=>setQ(e.target.value)} />
-          <label className={styles.chk}>
-            <input type="checkbox" checked={onlyWithPhone} onChange={e=>setOnlyWithPhone(e.target.checked)} />
-            Sólo con teléfono
-          </label>
+        <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+          <Link href="/receipts" className={styles.btnOutline}>← Recibos</Link>
+          <a href="https://web.whatsapp.com" target="_blank" rel="noopener noreferrer" className={styles.btnPrimary}>
+            Abrir WhatsApp Web
+          </a>
+          <Link href="/" className={styles.btnPrimary}>Horario</Link>
+          <div className={styles.weekBadge}>Mes: {fmtMonthHuman(month)}</div>
         </div>
       </div>
 
-      <div className={styles.toolbar}>
-        <span className={styles.muted}>{filtered.length} mensajes listos</span>
-      </div>
+      {/* === CONTENIDO A PANTALLA COMPLETA: grid de tarjetas (idéntico patrón) === */}
+      <div className={styles.board}>
+        <div className={styles.cardsGrid}>
+          {filtered.map(it=>{
+            const phone = (it.phone || '').replace(/\D/g,'');
+            const waLink = phone ? `https://wa.me/34${phone}?text=${encodeURIComponent(message(it))}` : null;
+            const isDone = doneIds.has(it.studentId);
 
-      <div className={styles.grid}>
-        {filtered.map(it=>{
-          const link = waLink(it.phone, message(it));
-          return (
-            <div key={it.studentId} className={styles.card}>
-              <div className={styles.cardTop}>
-                <div>
-                  <div className={styles.name}>{it.fullName}</div>
-                  <div className={styles.meta}>
-                    {it.phone ? `📱 ${it.phone}` : '— sin teléfono —'} · {fmtMoney(it.amount)}
-                  </div>
+            const onCopy = async () => {
+              try {
+                await navigator.clipboard.writeText(message(it));
+                await setStatus(it, "ENVIADO");
+                markDone(it.studentId);
+              } catch {
+                alert('No se pudo copiar');
+              }
+            };
+
+            const onOpenChat = async () => {
+              await setStatus(it, "ENVIADO");
+              markDone(it.studentId);
+            };
+
+            return (
+              <div key={it.studentId} className={`${styles.card} ${isDone ? styles.cardDone : ''}`}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+                  <div style={{ fontWeight:600 }}>{it.fullName}</div>
+                  {isDone && <span className={styles.donePill}>Hecho</span>}
                 </div>
-                {link
-                  ? <a href={link} target="_blank" rel="noopener noreferrer" className={styles.btnPrimary}>Abrir chat</a>
-                  : <button className={styles.btnDisabled} disabled>Sin teléfono</button>
-                }
-              </div>
 
-              <div className={styles.preview}>{message(it)}</div>
+                <div style={{ fontSize:12, opacity:.7, marginBottom:10 }}>
+                  {it.phone ? `📱 ${it.phone}` : '— sin teléfono —'} · {fmtMoney(it.amount)}
+                </div>
 
-              <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-                <label>Estado:</label>
-                <select
-                  value={it.status}
-                  onChange={e=> setStatus(it, e.target.value)}
-                  className={styles.input}
-                >
-                  {STATUSES.map(s=> <option key={s} value={s}>{s}</option>)}
-                </select>
-                <button
-                  className={styles.btnCopy}
-                  onClick={async ()=>{
-                    try { await navigator.clipboard.writeText(message(it)); alert('Copiado'); }
-                    catch { alert('No se pudo copiar'); }
-                  }}
-                >Copiar texto</button>
+                <textarea value={message(it)} readOnly rows={4} className={styles.msgBox} />
+
+                <div style={{ display:'flex', gap:8, marginTop:8 }}>
+                  <button onClick={onCopy} className={styles.btnOutline}>Copiar</button>
+
+                  {waLink ? (
+                    <a href={waLink} target="_blank" rel="noopener noreferrer" className={styles.btnPrimary} onClick={onOpenChat}>
+                      WhatsApp
+                    </a>
+                  ) : (
+                    <span style={{ fontSize:12, opacity:.7 }}>Sin teléfono</span>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </div>
   );

@@ -213,14 +213,17 @@ export default function Page(){
   const [weekStart, setWeekStart] = useState(()=> mondayOfWeek(new Date()));
   const [weekSaved, setWeekSaved] = useState(false);
 
+  // DIAS DE LA SEMANA DEL HORARIO
   const weekDates = useMemo(() => {
     const weekdayFmt = new Intl.DateTimeFormat('es-ES', { weekday: 'long' });
     return DAYS.map((d,i) => {
       const dt = addDays(weekStart, i);
-      return { ...d, pretty: `${capitalize(weekdayFmt.format(dt))} ${ddmmyy(dt)}`, date: dt };
+      const dayNum = String(dt.getDate()).padStart(2, '0'); // "25"
+      return { ...d, pretty: `${capitalize(weekdayFmt.format(dt))} ${dayNum}`, date: dt };
     });
   }, [weekStart]);
 
+  // EXPORTAR A PDF
   async function exportElementToPdf(el, fileName){
     if (!el) return;
     const [{ default: html2canvas }, jsPDFmod] = await Promise.all([
@@ -252,6 +255,45 @@ export default function Page(){
     const el = teacherKey === 'NURIA' ? exportRefNuria.current : exportRefSanti.current;
     await exportElementToPdf(el, `Horario-${teacherKey}.pdf`);
   }
+
+/*
+  async function exportBothTeachers(){
+    const elNuria = exportRefNuria.current;
+    const elSanti = exportRefSanti.current;
+    if (!elNuria || !elSanti) return;
+
+    const [{ default: html2canvas }, jsPDFmod] = await Promise.all([
+      import('html2canvas'),
+      import('jspdf')
+    ]);
+
+    const pdf = new jsPDFmod.jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+
+    async function addElementAsPage(el, isFirstPage=false){
+      const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+      const imgData = canvas.toDataURL('image/png');
+
+      let imgW = pageW * 0.98;
+      let imgH = (canvas.height * imgW) / canvas.width;
+      if (imgH > pageH * 0.98) {
+        imgH = pageH * 0.98;
+        imgW = (canvas.width * imgH) / canvas.height;
+      }
+      const x = (pageW - imgW) / 2;
+      const y = (pageH - imgH) / 2;
+
+      if (!isFirstPage) pdf.addPage();
+      pdf.addImage(imgData, 'PNG', x, y, imgW, imgH, undefined, 'FAST');
+    }
+
+    // 1ª página: Nuria, 2ª: Santi
+    await addElementAsPage(elNuria, true);
+    await addElementAsPage(elSanti, false);
+
+    pdf.save('Horario-Nuria-Santi.pdf');
+  }*/
 
   async function loadAll(autoCloneIfEmpty = true){
     const w = toISODateLocal(weekStart);
@@ -397,13 +439,13 @@ export default function Page(){
     if (res.ok) setLessons(prev=>prev.filter(l=>l.id!==id)); else alert('Error eliminando');
   }
 
-  function CellTeacher({ dia, inicioMin, teacherKey }){
+  function CellTeacher({ dia, inicioMin, teacherKey, className  }){
     const id = `cell:${dia}:${inicioMin}:${teacherKey}`;
     const here = eventsMap.get(`${dia}:${inicioMin}:${teacherKey}`) || [];
     const bgClass = teacherKey === 'NURIA' ? styles.cellNuria : styles.cellSanti;
 
     return (
-      <DroppableCell id={id} className={bgClass}>
+      <DroppableCell id={id} className={`${bgClass} ${className || ''}`}>
         <div className={styles.cellInner}>
           {here.map(ls => {
             const student = students.find(s=>s.id===ls.studentId);
@@ -446,7 +488,7 @@ export default function Page(){
 
 
   const anyConflict = lessons.some(ls => conflictLocal(ls));
-  const gridColsStyle = { gridTemplateColumns: `120px ${Array.from({length: DAYS.length * TEACHERS.length}).map(()=> '1fr').join(' ')}` };
+  const gridColsStyle = { gridTemplateColumns: `140px repeat(${timeSlots.length}, 1fr)` };
 
   async function setLessonActual(id, { startHHMM, endHHMM, presetMin, clear }) {
     let actualStartMin = undefined;
@@ -577,6 +619,7 @@ export default function Page(){
             </button>
             <button onClick={()=>exportTeacher('NURIA')} className={styles.btnOutline}>PDF Nuria</button>
             <button onClick={()=>exportTeacher('SANTI')} className={styles.btnOutline}>PDF Santi</button>
+{/*            <button onClick={exportBothTeachers} className={styles.btnOutline}>PDF Ambos</button>*/}
             <Link href={`/send?weekStart=${toISODateLocal(weekStart)}`} className={styles.btnPrimary}>Enviar horario</Link>
             <Link href="/students" className={styles.btnPrimary}>BD</Link>
             <Link href="/receipts" className={styles.btnPrimary}>Recibos</Link>
@@ -638,31 +681,39 @@ export default function Page(){
 
           <div className={styles.board}>
             <div className={styles.scheduleGrid} style={gridColsStyle}>
-              {/* Fila 1: nombres de días (ocupan 2 columnas) */}
+              {/* Fila 1: cabecera de horas */}
               <div></div>
-              {weekDates.map(d => (
-                <div key={`day-${d.key}`} className={styles.dayHeader} style={{ gridColumn: 'span 2' }}>
-                  {d.pretty}
+              {timeSlots.map(start => (
+                <div key={`h-${start}`} className={styles.dayHeader}>
+                  {minutesToLabel(start)}
                 </div>
               ))}
 
-              {/* Fila 2: profesores por día */}
-              <div></div>
-              {DAYS.map(d => TEACHERS.map(t => (
-                <div key={`head-${d.key}-${t.key}`} className={styles.teacherHeader}>
-                  <span className={styles.teacherChip}>{t.label}</span>
-                </div>
-              )))}
+              {/* Filas: por cada día, una fila por profesor */}
+              {DAYS.map((d, di) => (
+                <React.Fragment key={`day-${d.key}`}>
+                  {TEACHERS.map(t => (
+                    <React.Fragment key={`row-${d.key}-${t.key}`}>
+                      {/* Celda fija izquierda: Día + Profe */}
+                      <div className={`${styles.dayHeader} ${styles.leftHeader}`}>
+                        <div className={styles.leftHeaderDay}>{weekDates[di].pretty}</div>
+                        <div className={styles.leftHeaderTeacher}>
+                          <span className={styles.teacherChip}>{t.label}</span>
+                        </div>
+                      </div>
 
-              {/* Filas por hora */}
-              {timeSlots.map(start => (
-                <React.Fragment key={start}>
-                  <div className={styles.timeLabelCell}>
-                    {minutesToLabel(start)}
-                  </div>
-                  {DAYS.flatMap(d => TEACHERS.map(t => (
-                    <CellTeacher key={`${d.key}-${start}-${t.key}`} dia={d.key} inicioMin={start} teacherKey={t.key} />
-                  )))}
+                      {/* Celdas de ese día/profe a lo largo de TODAS las horas */}
+                      {timeSlots.map(start => (
+                        <CellTeacher
+                          key={`cell-${d.key}-${t.key}-${start}`}
+                          dia={d.key}
+                          inicioMin={start}
+                          teacherKey={t.key}
+                          className={t.key === 'NURIA' ? styles.rowNuria : styles.rowSanti}
+                        />
+                      ))}
+                    </React.Fragment>
+                  ))}
                 </React.Fragment>
               ))}
             </div>

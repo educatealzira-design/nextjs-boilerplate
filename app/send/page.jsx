@@ -3,7 +3,7 @@
 import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import styles from '../page.module.css'; // ⬅️ reutilizamos estilos de la portada
+import styles from './send.module.css'; // ⬅️ reutilizamos estilos de la portada
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -37,6 +37,15 @@ function SendInner(){
 
   const [students, setStudents] = useState([]);
   const [lessons, setLessons] = useState([]);
+  const [doneIds, setDoneIds] = useState(new Set()); //ids de tarjetas marcadas como hechas (copiado o whatsapp)
+  const markDone = (id) => {
+    setDoneIds(prev => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  };
+
 
   useEffect(() => {
     async function load(){
@@ -110,31 +119,66 @@ function SendInner(){
         </div>
       </div>
 
-      {/* Contenido */}
-      <div className={styles.rightPanel}>
+      {/* Contenido A PANTALLA COMPLETA */}
+      <div className={styles.fullWidth}>
         <div className={styles.board}>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))', gap:12 }}>
+          <div className={styles.cardsGrid}>
             {students.map(st => {
               const items = lessonsByStudent.get(st.id) || [];
               const msg = buildMessage(st, items);
-              const phone = (st.phone || '').replace(/\D/g,''); // quita espacios/guiones
+              const phone = (st.phone || '').replace(/\D/g,'');
               const waLink = phone ? `https://wa.me/34${phone}?text=${encodeURIComponent(msg)}` : null;
 
+              const isDone = doneIds.has(st.id);
+
+              const handleCopy = async () => {
+                try {
+                  await navigator.clipboard.writeText(msg);
+                  markDone(st.id);
+                } catch (e) {
+                  console.error('No se pudo copiar', e);
+                }
+              };
+
+              const handleWhatsAppClick = () => {
+                // se marca como hecho aunque se abra en nueva pestaña
+                markDone(st.id);
+              };
+
               return (
-                <div key={st.id} style={{ border:'1px solid #e5e7eb', borderRadius:12, padding:12, background:'#fff' }}>
-                  <div style={{ fontWeight:600, marginBottom:6 }}>{st.fullName}</div>
+                <div
+                  key={st.id}
+                  className={`${styles.card} ${isDone ? styles.cardDone : ''}`}
+                >
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+                    <div style={{ fontWeight:600 }}>{st.fullName}</div>
+                    {isDone && <span className={styles.donePill}>Hecho</span>}
+                  </div>
+
                   <div style={{ fontSize:12, opacity:.7, marginBottom:10 }}>
                     {items.length} clase(s) esta semana
                   </div>
-                  <textarea value={msg} readOnly rows={4}
-                            style={{ width:'100%', resize:'vertical', fontFamily:'inherit', padding:8, border:'1px solid #e5e7eb', borderRadius:8 }}/>
+
+                  <textarea
+                    value={msg}
+                    readOnly
+                    rows={4}
+                    className={styles.msgBox}
+                  />
+
                   <div style={{ display:'flex', gap:8, marginTop:8 }}>
-                    <button onClick={()=>navigator.clipboard.writeText(msg)}
-                            className={styles.btnOutline}>
+                    <button onClick={handleCopy} className={styles.btnOutline}>
                       Copiar
                     </button>
+
                     {waLink ? (
-                      <a href={waLink} target="_blank" rel="noopener noreferrer" className={styles.btnPrimary}>
+                      <a
+                        href={waLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={styles.btnPrimary}
+                        onClick={handleWhatsAppClick}
+                      >
                         WhatsApp
                       </a>
                     ) : (

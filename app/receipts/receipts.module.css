@@ -1,24 +1,171 @@
-.container{padding:24px;max-width:1200px;margin:0 auto}
-.header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:16px}
-.title{font-size:28px;margin:0}
-.subtitle{margin:4px 0 12px;color:#6b7280}
-.actions{display:flex;gap:8px;align-items:center}
-.row{display:flex;gap:8px;align-items:center;margin-top:8px}
-.label{font-weight:600}
-.input{border:1px solid #d1d5db;border-radius:8px;padding:8px 10px}
-.inputNum{width:90px;border:1px solid #d1d5db;border-radius:8px;padding:6px 8px;text-align:right}
-.btn{background:#111827;color:white;border:none;border-radius:10px;padding:8px 12px;cursor:pointer}
-.btn:hover{opacity:.9}
-.btnOutline{border:1px solid #d1d5db;background:#fff;border-radius:10px;padding:8px 12px;cursor:pointer}
-.chk{display:flex;gap:6px;align-items:center}
-.tableWrap{overflow:auto;border:1px solid #e5e7eb;border-radius:12px}
-.table{width:100%;border-collapse:separate;border-spacing:0}
-.table thead th{position:sticky;top:0;background:#f9fafb;border-bottom:1px solid #e5e7eb;padding:10px;text-align:left}
-.table tbody td{border-bottom:1px solid #f1f5f9;padding:10px;vertical-align:top}
-.table tfoot td{background:#f9fafb;border-top:1px solid #e5e7eb;padding:10px}
-.right{text-align:right}
-.name{font-weight:600}
-.details{margin-top:6px}
-.ul{margin:8px 0 0 16px;padding:0;}
-.dates{color:#6b7280;font-size:12px;margin-top:2px}
-.rowButtons{display:flex;gap:8px}
+/* ===== Layout raíz (mismo patrón que Enviar horario) ===== */
+.layout{
+  display:flex; flex-direction:column;
+  min-height:100svh; background:#fff; color:var(--ink);
+  padding: var(--gap);
+}
+
+/* ===== Cabecera ===== */
+.header{
+  display:flex; flex-direction:column; gap:10px;
+  margin-bottom:12px;padding: 18px;
+}
+
+/* Botones (idénticos a otras páginas) */
+.btnPrimary, .btnOutline, .btn{
+  appearance:none; border:1px solid var(--beige-200); margin: 4px;;
+  background: var(--beige-300); color:#4a4a4a;
+  padding:6px 10px; border-radius:14px; text-decoration:none;
+  font-weight:600; line-height:1; cursor:pointer;
+  transition: background .15s ease, border-color .15s ease, transform .05s ease, box-shadow .15s ease;
+}
+.btnPrimary:hover, .btnOutline:hover, .btn:hover{ background: var(--beige-100); transform: translateY(-1px); }
+
+.headerActions{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+
+/* Fila de cabecera: título a la izq, controles a la dcha */
+.headerRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap; /* permite bajar a dos líneas si no cabe */
+}
+
+/* Contenedor derecho (botones + filtros) */
+.controls{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  flex-wrap:wrap;
+  margin-left:auto; /* empuja a la derecha */
+}
+
+/* Grupos internos para ordenar: [botones] [filtros] */
+.controlsGroup{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+/* En pantallas pequeñas, que se apilen debajo manteniendo orden visual */
+@media (max-width: 820px){
+  .headerRow{
+    align-items:flex-start;
+  }
+  .controls{
+    width:100%;
+    justify-content:flex-start; /* quedan debajo del título */
+    margin-left:0;
+  }
+}
+
+
+/* Filtros */
+.filters{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.label{ font-size:12px; color:#444; }
+.input{
+  border:1px solid var(--border); border-radius:12px; padding:8px 12px; font:inherit; background:#fff; outline:none;
+}
+.input:focus{ border-color:#cfc7bd; box-shadow:0 0 0 3px rgba(217,209,200,.35); }
+.chk{ font-size:13px; color:#333; display:flex; align-items:center; gap:6px; }
+
+/* ===== Board / Tabla ===== */
+.board{
+  background:#fff; border:1px solid var(--border); border-radius:12px;
+  overflow:auto; max-height: calc(100vh - 180px); 
+}
+.board::-webkit-scrollbar{ height:10px; width:10px; }
+.board::-webkit-scrollbar-thumb{ background:var(--beige-200); border-radius:999px; }
+
+.tableWrap{ width:100%; overflow:auto;}
+
+
+/* Select compacto para Método */
+.selectSm {
+  min-width: 110px;
+  width: auto;          /* no ocupar todo */
+  padding: 6px 8px;     /* igual que tus inputs */
+}
+
+/* En móviles el layout pasa a "cards", así que anchuras fijas no aplican;
+   el select compacto sigue respetando min-width. */
+@media (max-width: 700px){
+  .colAmount, .colMethod { width: auto; }
+}
+
+
+.table{
+  width:100%; border-collapse:separate; border-spacing:0;
+  font-size:14px;
+}
+
+.table thead th{
+  position:sticky; top:0; z-index:5;
+  background: var(--beige-100);
+  text-align:left; padding:10px 12px; font-weight:800; border-bottom:1px solid var(--border);
+}
+.table tbody td{
+  padding:10px 12px; border-bottom:1px solid var(--border); vertical-align:top;
+  background:#fff;
+}
+.table tbody tr:nth-child(odd) td{ background:#fafafa; }
+.table tfoot td{
+  background:#fff; padding:12px; border-top:1px solid var(--border);
+}
+.tfoot{
+  position:sticky; bottom:0; z-index:4;
+  box-shadow: 0 -6px 12px rgba(0,0,0,.04);
+}
+
+/* Alineación derecha utilitaria */
+.right{ text-align:right; }
+
+/* Inputs num/select dentro de la tabla */
+.inputNum, .select{
+  border:1px solid var(--border); border-radius:10px; padding:6px 8px; font:inherit; background:#fff; outline:none;
+  min-width: 72px;
+}
+.inputNum:focus, .select:focus{ border-color:#cfc7bd; box-shadow:0 0 0 3px rgba(217,209,200,.35); }
+
+/* Nombre + pill de estado */
+.nameRow{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.name{ font-weight:800; }
+.muted{ color:#555; }
+
+/* Pills de estado (coherentes con “Enviar horario”) */
+.statusPill{
+  display:inline-block; padding:2px 8px; border-radius:9999px; font-size:11px; font-weight:700;
+  border:1px solid transparent;
+}
+.pending{ background:#f3f4f6; color:#374151; }
+.sent{ background:#fef9c3; color:#854d0e; border-color:#fde68a; }    /* dorado suave */
+.paid{ background:#dcfce7; color:#166534; border-color:#86efac; }     /* verde suave */
+
+/* Coloreo de fila según estado (sutil) */
+.rowSent td{ box-shadow: inset 0 0 0 9999px rgba(250, 204, 21, .06); }  /* amarillo 500 con baja opacidad */
+.rowPaid td{ box-shadow: inset 0 0 0 9999px rgba(16, 185, 129, .06); }   /* verde 500 con baja opacidad */
+
+/* Botonera de fila */
+.rowButtons{ display:flex; gap:8px; align-items:center; }
+
+/* Details (desglose) */
+.details{ margin-top:6px; }
+.details > summary{ cursor:pointer; font-size:12px; color:#374151; }
+.ul{ margin:6px 0 0 0; padding-left:16px; }
+.ul li{ margin:2px 0; font-size:12px; color:#374151; }
+
+/* Responsivo: tabla “card-like” en móviles pequeños */
+@media (max-width: 700px){
+  .table thead{ display:none; }
+  .table, .table tbody, .table tr, .table td{ display:block; width:100%; }
+  .table tr{ border:1px solid var(--border); border-radius:12px; margin:10px 0; overflow:hidden; }
+  .table td{ border-bottom:1px solid var(--border); }
+  .table td:last-child{ border-bottom:0; }
+  .right{ text-align:left; }
+  .rowButtons{ justify-content:flex-start; }
+}
+
+/* Small tweaks */
+.titleRow .btnOutline, .titleRow .btnPrimary{ white-space:nowrap; }
