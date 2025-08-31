@@ -1,18 +1,16 @@
+// app/api/invoices/route.js
 import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma"; // instancia singleton
+import prisma from "@/lib/prisma";
 
-// GET /api/invoices?month=YYYY-MM
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
-    const month = searchParams.get("month"); // "YYYY-MM" o null
-
+    const month = searchParams.get("month");
     const where = month ? { yearMonth: month } : {};
     const invoices = await prisma.invoice.findMany({
       where,
       orderBy: [{ yearMonth: "desc" }, { createdAt: "desc" }],
     });
-
     return NextResponse.json(invoices);
   } catch (err) {
     console.error("GET /api/invoices error", err);
@@ -20,8 +18,6 @@ export async function GET(req) {
   }
 }
 
-// POST /api/invoices
-// body: { studentId, yearMonth, rate, adjustMin, totalMin, amount, status }
 export async function POST(req) {
   let body;
   try {
@@ -37,7 +33,6 @@ export async function POST(req) {
     }
   }
 
-  // Normalizaciones
   const rate = Number(body.rate);
   const adjustMin = Number(body.adjustMin);
   const totalMin = Number(body.totalMin);
@@ -49,8 +44,13 @@ export async function POST(req) {
     return NextResponse.json({ error: "yearMonth debe tener formato YYYY-MM" }, { status: 400 });
   }
 
+  // timestamps segun status
+  const status = body.status || "PENDIENTE";
+  const now = new Date();
+  const sentAt  = status === "ENVIADO" || status === "PAGADO" ? now : undefined;
+  const paidAt  = status === "PAGADO" ? now : undefined;
+
   try {
-    // Upsert por (studentId, yearMonth)
     const invoice = await prisma.invoice.upsert({
       where: { studentId_yearMonth: { studentId: body.studentId, yearMonth: body.yearMonth } },
       update: {
@@ -58,7 +58,11 @@ export async function POST(req) {
         adjustMin,
         totalMin,
         amount,
-        status: body.status || "PENDIENTE",
+        status,
+        paymentMethod: typeof body.paymentMethod === "string" ? body.paymentMethod : undefined,
+        // no sobreescribas sentAt/paidAt si ya existían y el nuevo status no lo requiere
+        ...(sentAt  ? { sentAt } : {}),
+        ...(paidAt  ? { paidAt } : {}),
       },
       create: {
         studentId: body.studentId,
@@ -67,7 +71,10 @@ export async function POST(req) {
         adjustMin,
         totalMin,
         amount,
-        status: body.status || "PENDIENTE",
+        status,
+        paymentMethod: typeof body.paymentMethod === "string" ? body.paymentMethod : null,
+        sentAt: sentAt ?? null,
+        paidAt: paidAt ?? null,
       },
     });
     return NextResponse.json(invoice, { status: 200 });

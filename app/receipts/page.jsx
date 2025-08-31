@@ -30,36 +30,84 @@ function normalize(s){ return String(s||'').toLowerCase().trim(); }
 
 /**
  * TARIFAS ESTÁNDAR
- * - PRIMARIA: 7 €/h
- * - 1–2 ESO: 8 €/h
- * - 3–4 ESO: 9 €/h
- * - BACHILLER: 12 €/h
- * - CICLOS/FP/GM/GS: 9 €/h
  */
-function defaultRateForCourse(courseText){
+//helper: toma la primera tarifa > 0 y evita que 0 bloquee los fallback
+function firstPositive(/* ...vals */) {
+  for (const v of arguments) {
+    const n = Number(v);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return 0;
+}
+//si el alumno no tiene weeklyHours en BD, inferimos horas/semana a partir del horario
+function computeWeeklyHoursFromLessons(studentId, lessons){
+  // sumamos una semana tipo: cada franja única (DOW+start) cuenta una vez
+  const uniq = new Map();
+  for (const ls of lessons){
+    if (ls.studentId !== studentId) continue;
+    const key = `${ls.dayOfWeek}-${ls.startMin}`;
+    if (!uniq.has(key)) {
+      const dur = Number(ls.actualDurMin ?? ls.durMin) || 0;
+      uniq.set(key, dur);
+    }
+  }
+  const weeklyMin = Array.from(uniq.values()).reduce((a,b)=>a+b,0);
+  return weeklyMin / 60;
+}
+function parseCourse(courseText){
   const c = normalize(courseText);
+  if (/\bprim(?:aria)?\b/.test(c)) return 'PRIMARIA';
 
-  // PRIMARIA (1º..6º)
-  if (/\bprim(?:aria)?\b/.test(c)) return 7;
-
-  // ESO: detecta 1..4 ESO
   const eso = c.match(/(\d)\s*º?\s*eso/);
   if (eso) {
     const n = Number(eso[1]);
-    if (n === 1 || n === 2) return 8;   // 1-2 ESO
-    if (n === 3 || n === 4) return 9;   // 3-4 ESO
+    if (n===1) return 'ESO1';
+    if (n===2) return 'ESO2';
+    if (n===3) return 'ESO3';
+    if (n===4) return 'ESO4';
   }
 
-  // BACHILLER (1º o 2º)
-  if (/\b(1|2)\s*º?\s*(bach|bachiller|bachillerato)\b/.test(c) || /\bbach(iller|illerato)?\b/.test(c)) {
-    return 12;
-  }
+  if (/\b1\s*º?\s*(bach|bachiller|bachillerato)\b/.test(c)) return 'BACH1';
+  if (/\b2\s*º?\s*(bach|bachiller|bachillerato)\b/.test(c)) return 'BACH2';
 
-  // CICLOS / FP / GM / GS
-  if (/\b(fp|ciclo|ciclos|grado medio|grado superior|formativo)\b/.test(c)) return 9;
+  if (/\b(fp|ciclo|ciclos|grado medio|grado superior|formativo)\b/.test(c)) return 'CICLO';
+  return null;
+}
 
-  // No reconocido
-  return 0;
+// Tablas por horas/semana (redondeamos horas al entero más cercano)
+const RATE_TABLE = {
+  PRIMARIA: { 1: 7.5, 2: 6.25, 3: 5.83, 4: 5.63, 5: 5.25 },
+  ESO1:     { 1: 8.00, 2: 7.13, 3: 6.25, 4: 5.94, 5: 5.50 },
+  ESO2:     { 1: 8.00, 2: 7.13, 3: 6.67, 4: 5.94, 5: 5.50 },
+  ESO3:     { 1: 8.00, 2: 7.50, 3: 7.00, 4: 6.88, 5: 6.25 },
+  ESO4:     { 1: 8.00, 2: 7.50, 3: 7.00, 4: 6.88, 5: 6.25 },
+  BACH1:    { 1: 8.00, 2: 8.00, 3: 7.50, 4: 7.19 },     // no hay 5h, se “clampa”
+  BACH2:    { 1: 8.00, 2: 8.00, 3: 7.50, 4: 7.19 },     // no hay 5h, se “clampa”
+  // CICLO: tarifa fija
+};
+
+function defaultRateForStudent(student, weeklyHoursHint){
+  const cat = parseCourse(student?.course);
+  if (!cat) return 0;
+  if (cat === 'CICLO') return 7; // tarifa fija
+
+  const table = RATE_TABLE[cat];
+  if (!table) return 0;
+
+  // usa weeklyHours de BD o, si no hay, el hint calculado desde lessons
+  let wh = firstPositive(
+    student?.desiredHours,
+    student?.weeklyHours,
+    student?.hoursPerWeek,
+    student?.weekly_hours,
+    student?.hours_week,
+    weeklyHoursHint
+  ) || 1;
+
+  const hRounded = Math.round(wh);
+  const defined = Object.keys(table).map(Number);
+  const h = Math.min(Math.max(hRounded, Math.min(...defined)), Math.max(...defined));
+  return table[h];
 }
 
 export default function ReceiptsPage(){
@@ -80,40 +128,57 @@ export default function ReceiptsPage(){
   const debounceTimer = useRef(null);
 
   // cargar datos base
-  useEffect(()=>{
+  useEffect(() => {
     Promise.all([
-      fetch("/api/students").then(r=>r.json()),
-      fetch("/api/lessons").then(r=>r.json()),
-      fetch(`/api/invoices?month=${month}`).then(r=>r.json())
-    ]).then(([s,l,inv])=>{
-      setStudents(s); setLessons(l); setInvoices(Array.isArray(inv)?inv:[]);
-      // hidratar UI desde invoices o desde datos por defecto
-      const r={}, a={}, st={}, pm={};
-      for(const it of inv){
-        const stFromList = s.find(x=>x.id===it.studentId);
-        const byCourse = defaultRateForCourse(stFromList?.course);
-        const fromDb   = typeof stFromList?.billingRateEurHour === "number" ? stFromList.billingRateEurHour : undefined;
+      fetch("/api/students").then(r => r.json()),
+      fetch("/api/lessons").then(r => r.json()),
+      fetch(`/api/invoices?month=${month}`).then(r => r.json())
+    ])
+    .then(([sRaw, lRaw, invRaw]) => {
+      const sArr   = Array.isArray(sRaw)   ? sRaw   : (sRaw?.items ?? sRaw?.rows ?? []);
+      const lArr   = Array.isArray(lRaw)   ? lRaw   : (lRaw?.items ?? lRaw?.rows ?? []);
+      const invArr = Array.isArray(invRaw) ? invRaw : (invRaw?.items ?? invRaw?.rows ?? []);
 
-        // Prioridad: valor en invoice > BD > tarifa por curso
-        r[it.studentId]  = typeof it.rate==='number' ? it.rate : (fromDb ?? byCourse);
+      setStudents(sArr);
+      setLessons(lArr);
+      setInvoices(invArr);
+
+      const r = {}, a = {}, st = {}, pm = {};
+      for (const it of invArr) {
+        const stFromList = sArr.find(x => x.id === it.studentId);
+        const weeklyHoursHint = computeWeeklyHoursFromLessons(stFromList?.id, lArr);
+        const byCourse = defaultRateForStudent(stFromList, weeklyHoursHint);
+        const fromDb   = (typeof stFromList?.billingRateEurHour === "number")
+          ? stFromList.billingRateEurHour
+          : undefined;
+
+        // Prioridad correcta: invoice > tarifa guardada en alumno > por curso+horas
+        r[it.studentId]  = firstPositive(it.rate, fromDb, byCourse);
         a[it.studentId]  = it.adjustMin ?? 0;
         st[it.studentId] = it.status || "PENDIENTE";
         pm[it.studentId] = it.paymentMethod || "Transfer.";
       }
-      // fallback para alumnos sin invoice previa
-      for(const stn of s){
-        const byCourse = defaultRateForCourse(stn.course);
-        const fromDb   = typeof stn.billingRateEurHour === "number" ? stn.billingRateEurHour : undefined;
 
-        if (r[stn.id]==null) r[stn.id] = fromDb ?? byCourse; // aplica tarifa estándar si no hay BD
-        if (a[stn.id]==null) a[stn.id]=0;
-        if (!st[stn.id]) st[stn.id]="PENDIENTE";
+      // Fallback para los que no tienen invoice este mes
+      for (const stn of sArr) {
+        const weeklyHoursHint = computeWeeklyHoursFromLessons(stn.id, lArr);
+        const byCourse = defaultRateForStudent(stn, weeklyHoursHint);
+        const fromDb   = (typeof stn.billingRateEurHour === "number") ? stn.billingRateEurHour : undefined;
+
+        if (r[stn.id] == null) r[stn.id] = firstPositive(fromDb, byCourse);
+        if (a[stn.id] == null) a[stn.id] = 0;
+        if (!st[stn.id]) st[stn.id] = "PENDIENTE";
         if (!pm[stn.id]) pm[stn.id] = "Transfer.";
       }
-      setRates(r); setAdjustMin(a); setStatus(st); setPaymentMethod(pm);
-    }).catch((e)=>{
+
+      setRates(r);
+      setAdjustMin(a);
+      setStatus(st);
+      setPaymentMethod(pm);
+    })
+    .catch(e => {
       console.error("Error cargando datos", e);
-      setInvoices([]); // evitar crashear si la ruta falla
+      setStudents([]); setLessons([]); setInvoices([]);
     });
   }, [month]);
 
@@ -144,11 +209,15 @@ export default function ReceiptsPage(){
       items.sort((a,b)=> a.dow-b.dow || a.startMin-b.startMin);
       const adj = adjustMin[st.id] ?? 0;
       const totalMin = total + adj;
-
+      const weeklyHoursHint = (()=>{
+        if (!m) return 0;
+        // m ya tiene por alumno las franjas únicas de la semana
+        const weeklyMin = Array.from(m.values()).reduce((acc, it)=> acc + (Number(it.durMin)||0), 0);
+        return weeklyMin / 60;
+      })();
       // >>> TARIFA: manual (rates) > BD > estándar por curso
-      const fallbackCourseRate = defaultRateForCourse(st.course);
-      const rate = (rates[st.id] ?? st.billingRateEurHour ?? fallbackCourseRate ?? 0);
-
+      const fallbackCourseRate = defaultRateForStudent(st, weeklyHoursHint);
+      const rate = firstPositive(rates[st.id], st.billingRateEurHour, fallbackCourseRate);
       const amount = rate * (totalMin/60);
       const inv = invoices.find(i=>i.studentId===st.id);
       const invId = inv?.id || null;
@@ -384,7 +453,6 @@ export default function ReceiptsPage(){
     const row = rows.find(r=>r.student.id===studentId);
     if (row) queueSave({ ...row, stStatus: val });
   }
-
   return (
     <div className={styles.container}>
       <div className={styles.header}>
@@ -393,14 +461,12 @@ export default function ReceiptsPage(){
           <div className={styles.titleLeft}>
             <img src="/logo.png" alt="Edúcate" className={styles.logo}/>
           </div>
-
           {/* Derecha: botones + filtros */}
           <div className={styles.controls}>
             <div className={styles.controlsGroup}>
               <Link href="/" className={styles.btnOutline}>← Volver al horario</Link>
               <Link href="/invoices" className={styles.btnPrimary}>WhatsApp (cobros)</Link>
             </div>
-
             <div className={styles.controlsGroup}>
               <label className={styles.label}>Mes</label>
               <input
@@ -419,7 +485,6 @@ export default function ReceiptsPage(){
           </div>
         </div>
       </div>
-
       <div className={styles.tableWrap}>
         <table className={styles.table}>
           <thead>
@@ -456,7 +521,6 @@ export default function ReceiptsPage(){
                           {status[r.student.id] || r.stStatus || "PENDIENTE"}
                         </span>
                       </div>
-
                       {r.items.length>0 && (
                         <details className={styles.details}>
                           <summary>Ver desglose</summary>
@@ -481,7 +545,6 @@ export default function ReceiptsPage(){
                         onChange={e=> onChangeRate(r.student.id, e.target.value) }
                       />
                     </td>
-
                     <td className={styles.right}>
                       <input
                         type="number" step={15}
@@ -490,11 +553,9 @@ export default function ReceiptsPage(){
                         onChange={e=> onChangeAdj(r.student.id, e.target.value) }
                       />
                     </td>
-
                     <td className={`${styles.right} ${styles.colAmount}`}>
                       <span className={styles.amountNowrap}>{fmtMoney(r.amount)}</span>
                     </td>
-
                     <td className={styles.colMethod}>
                       <select
                         className={`${styles.select} ${styles.selectSm}`}
@@ -506,7 +567,6 @@ export default function ReceiptsPage(){
                         <option>Bizum</option>
                       </select>
                     </td>
-
                     <td>
                       <select
                         className={styles.select}
@@ -516,7 +576,6 @@ export default function ReceiptsPage(){
                         {STATUSES.map(s=> <option key={s} value={s}>{s}</option>)}
                       </select>
                     </td>
-
                     <td>
                       <div className={styles.rowButtons}>
                         <button
@@ -532,7 +591,6 @@ export default function ReceiptsPage(){
                         >
                           Copiar
                         </button>
-
                         <button
                           className={styles.btn}
                           onClick={()=>{

@@ -31,13 +31,30 @@ function mondayOf(date){
 function addDays(d, n){ const x = new Date(d); x.setDate(x.getDate()+n); return x; }
 
 function SendInner(){
+  function toYYYYMMDD(d) {
+    const yy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yy}-${mm}-${dd}`;
+  }
   const sp = useSearchParams();                 // ✅ dentro de Suspense
   const weekStartStr = sp.get('weekStart') || ''; // YYYY-MM-DD o vacío
   const weekStart = weekStartStr ? new Date(`${weekStartStr}T00:00:00`) : mondayOf(new Date());
-
+  const weekStartIso = useMemo(() => toYYYYMMDD(weekStart), [weekStart]);
+  const weekKey = useMemo(() => {
+    const raw = (weekStartStr || toYYYYMMDD(weekStart)).trim();
+    // normaliza a YYYY-MM-DD, aunque venga raro
+    const m = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (!m) return toYYYYMMDD(weekStart); // fallback seguro
+    const y = m[1];
+    const mm = String(Number(m[2])).padStart(2, '0');
+    const dd = String(Number(m[3])).padStart(2, '0');
+    return `${y}-${mm}-${dd}`;
+  }, [weekStartStr, weekStart]);
   const [students, setStudents] = useState([]);
   const [lessons, setLessons] = useState([]);
   const [doneIds, setDoneIds] = useState(new Set()); //ids de tarjetas marcadas como hechas (copiado o whatsapp)
+  const [sendByStudent, setSendByStudent] = useState(new Map());
   const markDone = (id) => {
     setDoneIds(prev => {
       const next = new Set(prev);
@@ -46,20 +63,92 @@ function SendInner(){
     });
   };
 
+  async function persistDone(studentId) {
+    try {
+      console.log('persistDone -> studentId:', studentId, 'weekKey:', weekKey);
+      const res = await fetch('/api/sends', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId,
+          weekKey,   // SIEMPRE YYYY-MM-DD correcto
+          status: 'ENVIADO'
+        })
+      });
+      if (res.ok) {
+        const row = await res.json();
+        // actualiza mapas locales
+        setSendByStudent(prev => {
+          const next = new Map(prev);
+          next.set(studentId, row);
+          return next;
+        });
+        } else {
+          const text = await res.text();
+          console.error('POST /api/sends no OK:', res.status, text);
+      }
+    } catch (e) {
+      console.error('No se pudo guardar ENVIADO', e);
+    }
+  }
+  async function undoDone(studentId) {
+    try {
+      const row = sendByStudent.get(studentId);
+      if (row?.id) {
+        const res = await fetch(`/api/sends/${row.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'PENDIENTE' })
+        });
+        if (res.ok) {
+          const updated = await res.json();
+          setSendByStudent(prev => {
+            const next = new Map(prev);
+            next.set(studentId, updated);
+            return next;
+          });
+        }
+      }
+      setDoneIds(prev => {
+        const next = new Set(prev);
+        next.delete(studentId);
+        return next;
+      });
+    } catch (e) {
+      console.error('No se pudo deshacer', e);
+    }
+  }
+
 
   useEffect(() => {
     async function load(){
-      const [sRes, lRes] = await Promise.all([
-        fetch('/api/students'),
-        fetch(`/api/lessons?weekStart=${weekStartStr}`)
-      ]);
+      const [sRes, lRes, sendsRes] = await Promise.all([
+       fetch('/api/students'),
+       fetch(`/api/lessons?weekStart=${weekKey}`),
+       fetch(`/api/sends?weekKey=${weekKey}`)
+     ]);
       const s = await sRes.json();
       const l = await lRes.json();
+      const sends = await sendsRes.json();
       setStudents(s);
       setLessons(l);
+
+      // mapa studentId -> send row
+      const map = new Map();
+      if (Array.isArray(sends)) {
+        for (const r of sends) map.set(r.studentId, r);
+      }
+      setSendByStudent(map);
+
+      // set de hechos
+      const done = new Set();
+      for (const [sid, r] of map.entries()) {
+        if (r.status === 'ENVIADO') done.add(sid);
+      }
+      setDoneIds(done);
     }
     load();
-  }, [weekStartStr]);
+  }, [weekKey]);
 
   // Agrupa y ordena SOLO la semana recibida; evita duplicados exactos
   const lessonsByStudent = useMemo(() => {
@@ -135,6 +224,7 @@ function SendInner(){
                 try {
                   await navigator.clipboard.writeText(msg);
                   markDone(st.id);
+                  persistDone(st.id);
                 } catch (e) {
                   console.error('No se pudo copiar', e);
                 }
@@ -143,6 +233,7 @@ function SendInner(){
               const handleWhatsAppClick = () => {
                 // se marca como hecho aunque se abra en nueva pestaña
                 markDone(st.id);
+                persistDone(st.id);
               };
 
               return (
@@ -152,7 +243,20 @@ function SendInner(){
                 >
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
                     <div style={{ fontWeight:600 }}>{st.fullName}</div>
-                    {isDone && <span className={styles.donePill}>Hecho</span>}
+                    {isDone && (
+                      <span className={styles.donePill}>
+                        Hecho
+                        <button
+                          type="button"
+                          className={styles.doneClose}
+                          aria-label="Desmarcar envío"
+                          title="Desmarcar"
+                          onClick={(e)=>{ e.preventDefault(); undoDone(st.id); }}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    )}
                   </div>
 
                   <div style={{ fontSize:12, opacity:.7, marginBottom:10 }}>

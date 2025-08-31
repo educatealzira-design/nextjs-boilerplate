@@ -267,9 +267,28 @@
 }
 /* ------- FIN PÁGINA ENVIAR HORARIO -------*/
 
-
-
-
+/* Mejora el pill "Hecho" y añade botón X */
+.donePill{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:2px 8px; /* tu estilo actual puede variar; esto lo hace cómodo */
+}
+.doneClose{
+  all: unset;
+  cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  font-weight: 800;
+  line-height: 1;
+  color: #fff;                /* texto blanco sobre el pill verde */
+  opacity: .95;
+}
+.doneClose:hover{ background: rgba(255,255,255,.20); }
+.doneClose:focus{ outline: 2px solid rgba(255,255,255,.55); outline-offset: 2px; }
 
 
 

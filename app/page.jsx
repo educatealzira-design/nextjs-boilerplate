@@ -91,6 +91,7 @@ function DroppableCell({ id, children, isOver, className }) {
   );
 }
 
+
 function EventBlock({ lesson, student, conflict, teacherKey, onDelete, onSetActual}) {
   const [open, setOpen] = useState(false);
   const displayStart = lesson.actualStartMin ?? lesson.startMin;
@@ -108,6 +109,7 @@ function EventBlock({ lesson, student, conflict, teacherKey, onDelete, onSetActu
     return `${h}:${m}`;
   });
   function stop(e){ e.stopPropagation(); e.preventDefault(); }
+
 
   return (
     <div
@@ -276,17 +278,30 @@ export default function Page(){
     setWeekSaved(!!st.saved);
 
     if (autoCloneIfEmpty && l.length === 0) {
+       // 1) busca la última semana marcada como 'saved' antes de la actual
+      const from = await findLastSavedWeekStart(weekStart);
+
+      // 2) si hay semana guardada, clona explícitamente desde ella
+      const clonePayload = from ? { fromWeekStart: from, toWeekStart: w } : { toWeekStart: w };
+
       const clone = await fetch('/api/weeks/clone', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ toWeekStart: w })
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(clonePayload)
       });
+
       if (clone.status === 201) {
         const created = await clone.json();
-        setLessons(created.map(x=>({
+        setLessons(created.map(x => ({
           id:x.id, studentId:x.studentId, teacher:x.teacher, dayOfWeek:x.dayOfWeek,
           startMin:x.startMin, durMin:x.durMin,
           actualStartMin:x.actualStartMin ?? null, actualDurMin:x.actualDurMin ?? null,
         })));
+      } else if (clone.status === 404) {
+        // servidor no encontró origen → simplemente deja la semana vacía
+        console.warn('No hay semana guardada previa para usar como plantilla.');
+      } else if (!clone.ok) {
+        alert('Error clonando la semana');
       }
     }
   }

@@ -1,2 +1,1 @@
--- AlterTable
-ALTER TABLE "public"."Student" ADD COLUMN     "billingRateEurHour" DOUBLE PRECISION;
+-- no-op, covered by 0_baseline
