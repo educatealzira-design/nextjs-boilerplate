@@ -256,45 +256,6 @@ export default function Page(){
     await exportElementToPdf(el, `Horario-${teacherKey}.pdf`);
   }
 
-/*
-  async function exportBothTeachers(){
-    const elNuria = exportRefNuria.current;
-    const elSanti = exportRefSanti.current;
-    if (!elNuria || !elSanti) return;
-
-    const [{ default: html2canvas }, jsPDFmod] = await Promise.all([
-      import('html2canvas'),
-      import('jspdf')
-    ]);
-
-    const pdf = new jsPDFmod.jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
-    const pageW = pdf.internal.pageSize.getWidth();
-    const pageH = pdf.internal.pageSize.getHeight();
-
-    async function addElementAsPage(el, isFirstPage=false){
-      const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
-      const imgData = canvas.toDataURL('image/png');
-
-      let imgW = pageW * 0.98;
-      let imgH = (canvas.height * imgW) / canvas.width;
-      if (imgH > pageH * 0.98) {
-        imgH = pageH * 0.98;
-        imgW = (canvas.width * imgH) / canvas.height;
-      }
-      const x = (pageW - imgW) / 2;
-      const y = (pageH - imgH) / 2;
-
-      if (!isFirstPage) pdf.addPage();
-      pdf.addImage(imgData, 'PNG', x, y, imgW, imgH, undefined, 'FAST');
-    }
-
-    // 1ª página: Nuria, 2ª: Santi
-    await addElementAsPage(elNuria, true);
-    await addElementAsPage(elSanti, false);
-
-    pdf.save('Horario-Nuria-Santi.pdf');
-  }*/
-
   async function loadAll(autoCloneIfEmpty = true){
     const w = toISODateLocal(weekStart);
     const [sRes, lRes, stRes] = await Promise.all([
@@ -539,9 +500,8 @@ export default function Page(){
           {/* Cabecera días */}
           <div></div>
           {weekDates.map(d => (
-            <div key={`day-${d.key}`} className={styles.dayHeader} style={{ gridColumn: 'span 2'}} >{d.pretty}</div>
+            <div key={`day-${d.key}`} className={`${styles.dayHeader} ${styles.exportDayHeader}`}>{d.pretty}</div>
           ))}
-
           {/* Filas por hora */}
           {timeSlots.map(start => (
             <React.Fragment key={start}>
@@ -619,7 +579,6 @@ export default function Page(){
             </button>
             <button onClick={()=>exportTeacher('NURIA')} className={styles.btnOutline}>PDF Nuria</button>
             <button onClick={()=>exportTeacher('SANTI')} className={styles.btnOutline}>PDF Santi</button>
-{/*            <button onClick={exportBothTeachers} className={styles.btnOutline}>PDF Ambos</button>*/}
             <Link href={`/send?weekStart=${toISODateLocal(weekStart)}`} className={styles.btnPrimary}>Enviar horario</Link>
             <Link href="/students" className={styles.btnPrimary}>BD</Link>
             <Link href="/receipts" className={styles.btnPrimary}>Recibos</Link>
