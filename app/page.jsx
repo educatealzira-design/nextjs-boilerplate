@@ -212,7 +212,7 @@ export default function Page(){
   const [group, setGroup] = useState('Todos');
   const exportRefNuria = useRef(null);
   const exportRefSanti = useRef(null);
-  const [weekStart, setWeekStart] = useState(()=> mondayOfWeek(new Date()));
+  const [weekStart, setWeekStart] = useState(()=> addDays(mondayOfWeek(new Date()), 7));
   const [weekSaved, setWeekSaved] = useState(false);
 
   // DIAS DE LA SEMANA DEL HORARIO
@@ -258,6 +258,23 @@ export default function Page(){
     await exportElementToPdf(el, `Horario-${teacherKey}.pdf`);
   }
 
+  async function seedFromLastIfEmpty(weekStartDate) {
+    // weekStartDate es un Date (lunes de la semana actual en tu state)
+    const w = toISODateLocal(weekStartDate);
+    try {
+      const res = await fetch('/api/lessons/seed-from-last', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ weekStart: w })
+      });
+      // 201 -> se sembró; 200/404 -> no hacía falta o no hay fuente; todos OK para continuar
+      return res.ok;
+    } catch (e) {
+      console.error('seed-from-last error', e);
+      return false;
+    }
+  }
+
   async function loadAll(autoCloneIfEmpty = true){
     const w = toISODateLocal(weekStart);
     const [sRes, lRes, stRes] = await Promise.all([
@@ -277,35 +294,21 @@ export default function Page(){
     })));
     setWeekSaved(!!st.saved);
 
+    // 👉 Nueva lógica: si la semana está vacía, siembra desde la última guardada
     if (autoCloneIfEmpty && l.length === 0) {
-       // 1) busca la última semana marcada como 'saved' antes de la actual
-      const from = await findLastSavedWeekStart(weekStart);
-
-      // 2) si hay semana guardada, clona explícitamente desde ella
-      const clonePayload = from ? { fromWeekStart: from, toWeekStart: w } : { toWeekStart: w };
-
-      const clone = await fetch('/api/weeks/clone', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(clonePayload)
-      });
-
-      if (clone.status === 201) {
-        const created = await clone.json();
-        setLessons(created.map(x => ({
+      const seededOk = await seedFromLastIfEmpty(weekStart);
+      if (seededOk) {
+        // Recarga SOLO las lessons de esta semana tras sembrar
+        const l2Res = await fetch(`/api/lessons?weekStart=${w}`);
+        const l2 = await l2Res.json();
+        setLessons(l2.map(x=>({
           id:x.id, studentId:x.studentId, teacher:x.teacher, dayOfWeek:x.dayOfWeek,
           startMin:x.startMin, durMin:x.durMin,
           actualStartMin:x.actualStartMin ?? null, actualDurMin:x.actualDurMin ?? null,
         })));
-      } else if (clone.status === 404) {
-        // servidor no encontró origen → simplemente deja la semana vacía
-        console.warn('No hay semana guardada previa para usar como plantilla.');
-      } else if (!clone.ok) {
-        alert('Error clonando la semana');
       }
     }
   }
-
   useEffect(()=>{ loadAll(); }, []);
   useEffect(()=>{ loadAll(); }, [weekStart]);
 
@@ -467,8 +470,10 @@ export default function Page(){
   const gridColsStyle = { gridTemplateColumns: `140px repeat(${timeSlots.length}, 1fr)` };
 
   async function setLessonActual(id, { startHHMM, endHHMM, presetMin, clear }) {
-    let actualStartMin = undefined;
-    let actualDurMin = undefined;
+    const curr = lessons.find(l => l.id === id);
+    if (!curr) { alert('Clase no encontrada'); return { ok:false }; }
+
+    let actualStartMin, actualDurMin;
 
     if (clear) {
       actualStartMin = null;
@@ -481,7 +486,7 @@ export default function Page(){
       actualDurMin = e - s;
     } else if (typeof presetMin === 'number') {
       actualDurMin = presetMin;
-      // si no se da inicio real, mantenemos el de la franja
+      actualStartMin = curr.actualStartMin ?? curr.startMin; // ← importante
     } else {
       return { ok:false };
     }
@@ -489,8 +494,13 @@ export default function Page(){
     const res = await fetch(`/api/lessons/${id}`, {
       method:'PUT',
       headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ actualStartMin, actualDurMin })
+      body: JSON.stringify({
+        actualStartMin,
+        actualDurMin,
+        weekStart: toISODateLocal(weekStart)
+      })
     });
+
     if (!res.ok) { alert('Error guardando duración real'); return { ok:false }; }
     const data = await res.json();
 
