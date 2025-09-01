@@ -27,8 +27,8 @@ model Student {
   billingRateEurHour Float?
   extras             Extracurricular[]
   invoice            Invoice[]
-  scheduleSend       ScheduleSend[]
   lessons            Lesson[]
+  scheduleSend       ScheduleSend[]
   subjects           Subject[]
   schoolBlocks       SchoolBlock[]
 
@@ -119,21 +119,20 @@ model Invoice {
 }
 
 model ScheduleSend {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   studentId String
-  weekStart DateTime?
-  weekKey   String 
-  status    String   @default("PENDIENTE")
-  sentAt    DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  weekStart DateTime  @db.Timestamptz(6)
+  status    String    @default("PENDIENTE")
+  sentAt    DateTime? @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  weekKey   String?
+  student   Student   @relation(fields: [studentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
-  @@unique([studentId, weekKey])
-  @@index([weekStart])
-  @@index([studentId])
-  @@index([weekKey])
+  @@unique([studentId, weekStart], map: "ScheduleSend_student_week_uq")
+  @@unique([studentId, weekKey], map: "ScheduleSend_student_weekkey_uq")
+  @@index([studentId], map: "ScheduleSend_student_idx")
+  @@index([weekStart], map: "ScheduleSend_week_idx")
 }
 
 model students {
@@ -151,10 +150,10 @@ model students {
 }
 
 enum ReferralSource {
-  AMIGOS
-  COMPANEROS
-  INTERNET
-  OTRO
+  amigos
+  companeros
+  internet
+  otro
 }
 
 enum Teacher {
