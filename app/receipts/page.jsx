@@ -12,8 +12,21 @@ function fmtMoney(n){ return new Intl.NumberFormat("es-ES", { style:"currency", 
 function fmtMonthHuman(ym){ const [y,m]=ym.split("-").map(Number); const d=new Date(Date.UTC(y,(m-1),1)); return d.toLocaleDateString("es-ES",{month:"long",year:"numeric", timeZone:"UTC"}); }
 
 // Mensaje de cobro para copiar
+function firstName(s = "") {
+  return String(s).trim().split(/\s+/)[0] || "";
+}
+function isPrimaryCourse(course) {
+  return /\bprim/.test(String(course || "").toLowerCase());
+}
 function buildChargeMessage(row){
-  return `Hola ${row.student.fullName}, la mensualidad de este mes son ${fmtMoney(row.amount)}.\nMuchas gracias.`;
+  const child  = firstName(row.student.fullName);
+  const parent = firstName(row.student.guardianName) || "familia";
+  const amount = fmtMoney(row.amount);
+
+  if (isPrimaryCourse(row.student.course)) {
+    return `Hola ${parent}, la mensualidad de ${child} de este mes es ${amount}.\nMuchas gracias.`;
+  }
+  return `Hola ${child}, la mensualidad de este mes es ${amount}.\nMuchas gracias.`;
 }
 
 function datesOfMonthForDOW(ym, dow) {

@@ -133,6 +133,9 @@ export default function InvoicesSendPage(){
         studentId: st.id,
         fullName: st.fullName,
         phone: st.phone,
+        guardianName: st.guardianName,
+        guardianPhone: st.guardianPhone,    
+        course: st.course,
         amount,
         status: inv?.status || "PENDIENTE"
       };
@@ -145,9 +148,21 @@ export default function InvoicesSendPage(){
 
   // Igual que "Enviar horario": grid de TODAS las tarjetas (ocultamos las que no tienen teléfono)
   const filtered = useMemo(()=> items, [items]);
-
+  function firstName(s = "") {
+    return String(s).trim().split(/\s+/)[0] || "";
+  }
+  function isPrimaryCourse(course) {
+    return /\bprim/.test(String(course || "").toLowerCase());
+  }
   function message(it){
-    return `Hola ${it.fullName.split(' ')[0]}, la mensualidad de este mes son ${fmtMoney(it.amount)}.\nMuchas gracias.`;
+    const child  = firstName(it.fullName);
+    const parent = firstName(it.guardianName) || "familia";
+    const amount = fmtMoney(it.amount);
+
+    if (isPrimaryCourse(it.course)) {
+      return `Hola ${parent}, la mensualidad de ${child} de este mes es ${amount}.\nMuchas gracias.`;
+    }
+    return `Hola ${child}, la mensualidad de este mes es ${amount}.\nMuchas gracias.`;
   }
 
   async function setStatus(it, newStatus){

@@ -174,10 +174,30 @@ function SendInner(){
 
   function teacherText(t){ return t === 'NURIA' ? 'conmigo' : 'con Santi'; }
 
+  // obtiene el primer nombre (o cadena vacía)
+  function firstName(s = "") {
+    return String(s).trim().split(/\s+/)[0] || "";
+  }
+
+  // si el curso es de primaria (para posibles mensajes distintos)
+  function isPrimary(student) {
+    const c = String(student?.course || "").toLowerCase();
+    // detecta “primaria”, “prim.”, “1º primaria”, “5 pri”, etc.
+    return /\bprim/.test(c);
+  }
+
   function buildMessage(student, items){
+    const child = firstName(student.fullName);
+    const parent = firstName(student.guardianName) || "familia";
+
+    // Formatea el cuerpo con las clases
     if (!items || items.length === 0) {
-      return `Hola ${student.fullName.split(' ')[0]}, esta semana no tienes clases programadas.`;
+      if (isPrimary(student)) {
+        return `Hola ${parent}, esta semana ${child} no tiene clases programadas.`;
+      }
+      return `Hola ${child}, esta semana no tienes clases programadas.`;
     }
+
     const parts = items.map(ls => {
       const start = (ls.actualStartMin ?? ls.startMin);
       const dur = (ls.actualDurMin ?? ls.durMin);
@@ -186,7 +206,13 @@ function SendInner(){
     const body = parts.length === 1
       ? parts[0]
       : parts.slice(0, -1).join(', ') + ' y ' + parts[parts.length - 1];
-    return `Hola ${student.fullName.split(' ')[0]}, esta semana tienes clase ${body}. Muchas gracias.`;
+
+    // 👉 Si es Primaria: mensaje a padre/madre con “tendrá”
+    if (isPrimary(student)) {
+      return `Hola ${parent}, esta semana ${child} tendrá clase ${body}. Muchas gracias.`;
+    }
+    // Secundaria/Bach/etc.: mensaje al alumno con “tienes”
+    return `Hola ${child}, esta semana tienes clase ${body}. Muchas gracias.`;
   }
 
   return (
