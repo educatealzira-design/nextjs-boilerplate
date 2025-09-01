@@ -144,7 +144,7 @@ export default function ReceiptsPage(){
   useEffect(() => {
     Promise.all([
       fetch("/api/students").then(r => r.json()),
-      fetch("/api/lessons").then(r => r.json()),
+      fetch(`/api/lessons/by-month?month=${month}&saved=1`).then(r => r.json()),
       fetch(`/api/invoices?month=${month}`).then(r => r.json())
     ])
     .then(([sRaw, lRaw, invRaw]) => {
@@ -152,16 +152,24 @@ export default function ReceiptsPage(){
       const lArr   = Array.isArray(lRaw)   ? lRaw   : (lRaw?.items ?? lRaw?.rows ?? []);
       const invArr = Array.isArray(invRaw) ? invRaw : (invRaw?.items ?? invRaw?.rows ?? []);
 
-      setStudents(sArr);
+      // 🔹 Unión: alumnos actuales + alumnos de las facturas del mes (por id)
+      const byId = new Map(sArr.map(s => [s.id, s]));
+      for (const inv of invArr) {
+        const st = inv.student; // gracias al include del API
+        if (st && !byId.has(st.id)) byId.set(st.id, st);
+      }
+      const studentsForMonth = Array.from(byId.values());
+      setStudents(studentsForMonth);
       setLessons(lArr);
       setInvoices(invArr);
 
       const r = {}, a = {}, st = {}, pm = {};
       for (const it of invArr) {
         const stFromList = sArr.find(x => x.id === it.studentId);
-        const weeklyHoursHint = computeWeeklyHoursFromLessons(stFromList?.id, lArr);
-        const byCourse = defaultRateForStudent(stFromList, weeklyHoursHint);
-        const fromDb   = (typeof stFromList?.billingRateEurHour === "number")
+        const stIncluded = it.student || stFromList;
+        const weeklyHoursHint = computeWeeklyHoursFromLessons(stIncluded?.id, lArr);
+        const byCourse = defaultRateForStudent(stIncluded, weeklyHoursHint);
+        const fromDb   = (typeof stIncluded?.billingRateEurHour === "number")
           ? stFromList.billingRateEurHour
           : undefined;
 
@@ -173,7 +181,7 @@ export default function ReceiptsPage(){
       }
 
       // Fallback para los que no tienen invoice este mes
-      for (const stn of sArr) {
+      for (const stn of studentsForMonth) {
         const weeklyHoursHint = computeWeeklyHoursFromLessons(stn.id, lArr);
         const byCourse = defaultRateForStudent(stn, weeklyHoursHint);
         const fromDb   = (typeof stn.billingRateEurHour === "number") ? stn.billingRateEurHour : undefined;
@@ -197,35 +205,66 @@ export default function ReceiptsPage(){
 
   // construir filas con horas × nº días del mes
   const rows = useMemo(()=>{
-    const byStudent = new Map();
-    for(const ls of lessons){
-      const keyS = ls.studentId;
-      const keyL = `${ls.dayOfWeek}-${ls.startMin}`;
-      if(!byStudent.has(keyS)) byStudent.set(keyS, new Map());
-      const m = byStudent.get(keyS);
-      if(!m.has(keyL)) m.set(keyL, { dow: ls.dayOfWeek, startMin: (ls.actualStartMin??ls.startMin), durMin: (ls.actualDurMin??ls.durMin) });
-    }
+   // Agrupa POR ALUMNO y, dentro, POR FRANJA (dow+start).
+   // Cada fila en "lessons" es una OCURRENCIA de esa semana guardada.
+   const byStudent = new Map();
+   for (const ls of lessons) {
+     const sid = ls.studentId;
+     const dow = ls.dayOfWeek;
+     const start = Number(ls.actualStartMin ?? ls.startMin);
+     const dur = Number(ls.actualDurMin ?? ls.durMin) || 0;
+     if (!byStudent.has(sid)) byStudent.set(sid, new Map());
+     const m = byStudent.get(sid);
+     const key = `${dow}-${start}`;
+     if (!m.has(key)) {
+       m.set(key, { dow, startMin: start, count: 0, totalMin: 0 });
+     }
+     const slot = m.get(key);
+     slot.count += 1;         // 1 ocurrencia en esa semana guardada
+     slot.totalMin += dur;    // la duración puede variar por semana
+   }
 
     const out=[];
     for(const st of students){
       const m = byStudent.get(st.id);
       let items=[], total=0;
-      if (m){
-        for(const it of m.values()){
-          const dates = datesOfMonthForDOW(month, it.dow);
-          const count = dates.length;
-          const minutes = it.durMin * count;
-          items.push({ dow: it.dow, startMin: it.startMin, durMin: it.durMin, count, dates });
-          total += minutes;
-        }
-      }
+          if (m) {
+            for (const it of m.values()) {
+              items.push({
+                dow: it.dow,
+                startMin: it.startMin,
+                count: it.count,
+                // para mostrar, enseñamos la media y el total real
+                avgDurMin: it.count ? Math.round(it.totalMin / it.count) : 0,
+                totalMin: it.totalMin,
+              });
+              total += it.totalMin; // suma real de todas las ocurrencias del mes
+            }
+          }
       items.sort((a,b)=> a.dow-b.dow || a.startMin-b.startMin);
       const adj = adjustMin[st.id] ?? 0;
       const totalMin = total + adj;
-      const weeklyHoursHint = (()=>{
-        if (!m) return 0;
-        // m ya tiene por alumno las franjas únicas de la semana
-        const weeklyMin = Array.from(m.values()).reduce((acc, it)=> acc + (Number(it.durMin)||0), 0);
+      // Hint de horas/semana: toma la ÚLTIMA semana guardada del mes (si existe)
+      const weeklyHoursHint = (() => {
+        const weeks = Array.from(new Set(lessons
+          .filter(x => x.studentId === st.id && x.weekStart)
+          .map(x => new Date(x.weekStart).getTime())))
+          .sort((a,b)=>a-b);
+        if (weeks.length === 0) return 0;
+        const lastWeek = weeks[weeks.length - 1];
+        const weekLessons = lessons.filter(x =>
+          x.studentId === st.id && x.weekStart && new Date(x.weekStart).getTime() === lastWeek
+        );
+        // horas de esa semana: franjas únicas de esa semana
+        const uniq = new Map();
+        for (const ls of weekLessons) {
+          const k = `${ls.dayOfWeek}-${ls.startMin}`;
+          if (!uniq.has(k)) {
+            const dur = Number(ls.actualDurMin ?? ls.durMin) || 0;
+            uniq.set(k, dur);
+          }
+        }
+        const weeklyMin = Array.from(uniq.values()).reduce((a,b)=>a+b,0);
         return weeklyMin / 60;
       })();
       // >>> TARIFA: manual (rates) > BD > estándar por curso
@@ -236,12 +275,26 @@ export default function ReceiptsPage(){
       const invId = inv?.id || null;
       const stStatus = status[st.id] || inv?.status || "PENDIENTE";
       const method = (paymentMethod[st.id] ?? inv?.paymentMethod ?? "Transfer.");
-      out.push({ student:st, invoiceId:invId, items, totalMinPlan: total, totalMin, rate, amount, stStatus, method, });
+      out.push({
+       student: st,
+       invoiceId: invId,
+       items,
+       totalMinPlan: total, // aquí ya es el real del mes (sin ajuste)
+       totalMin,
+       rate,
+       amount,
+       stStatus,
+       method,
+      });    
     }
 
     const t = q.toLowerCase();
     const filtered = out.filter(r=>{
-      if (onlyWithLessons && r.items.length===0 && (r.totalMinPlan===0)) return false;
+      // si hay invoice este mes, no ocultes aunque no tenga clases
+      const hasInvoiceThisMonth = invoices.some(i => i.studentId === r.student.id);
+      if (onlyWithLessons && r.items.length===0 && r.totalMinPlan===0 && !hasInvoiceThisMonth) {
+        return false;
+      }
       return r.student.fullName.toLowerCase().includes(t) || String(r.student.course||"").toLowerCase().includes(t);
     });
     filtered.sort((a,b)=> a.student.fullName.localeCompare(b.student.fullName, "es"));
@@ -540,7 +593,8 @@ export default function ReceiptsPage(){
                           <ul className={styles.ul}>
                             {r.items.map((it, idx)=> (
                               <li key={idx}>
-                                <strong>{DOW_LABEL[it.dow]}</strong> · {toHHMM(it.startMin)} · {it.durMin}m × {it.count}
+                                <strong>{DOW_LABEL[it.dow]}</strong> · {toHHMM(it.startMin)} · {it.count} clase(s) · {(it.totalMin/60).toFixed(2)} h
+                                {it.count > 1 ? ` (media ~${it.avgDurMin}m)` : ''}
                               </li>
                             ))}
                           </ul>

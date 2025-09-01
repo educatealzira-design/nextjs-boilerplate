@@ -8,9 +8,23 @@ export async function GET(req) {
     const month = searchParams.get("month");
     const where = month ? { yearMonth: month } : {};
     const invoices = await prisma.invoice.findMany({
-      where,
-      orderBy: [{ yearMonth: "desc" }, { createdAt: "desc" }],
-    });
+     where,
+     include: {
+       student: {
+         select: {
+           id: true,
+           fullName: true,
+           course: true,
+           phone: true,
+           billingRateEurHour: true,
+           desiredHours: true,
+           weeklyHours: true,       // por si lo tienes con este nombre
+           hoursPerWeek: true,      // o este…
+         }
+       }
+     },
+     orderBy: [{ yearMonth: "desc" }, { createdAt: "desc" }],
+   });
     return NextResponse.json(invoices);
   } catch (err) {
     console.error("GET /api/invoices error", err);
