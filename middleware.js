@@ -1,24 +1,31 @@
-// middleware.ts o middleware.js
+// middleware.js
 import { NextResponse } from 'next/server';
 
+const PUBLIC_API_PREFIXES = [
+  '/api/students',
+  '/api/lessons',   // incluye /api/lessons/by-month
+  '/api/invoices',
+];
+
 export const config = {
-  // Excluye recursos estáticos (_next) y el favicon para no pedir password por cada asset
+  // protege todo excepto estáticos; las APIs públicas las dejamos pasar en el código
   matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 };
 
-export default function middleware(req, Request) {
-  const expected = process.env.BASIC_AUTH_B64; // base64 de "usuario:password"
-  if (!expected) return NextResponse.next();   // si no hay variable, no protege nada
+export default function middleware(req) {
+  const path = new URL(req.url).pathname;
 
-  const { pathname } = new URL(req.url);
-  if (pathname.startsWith('/api/students') || pathname.startsWith('/api/lessons')) {
-    return NextResponse.next(); // deja pasar sin tu auth propia
+  // 1) Deja pasar sin auth tus APIs públicas
+  if (PUBLIC_API_PREFIXES.some((p) => path.startsWith(p))) {
+    return NextResponse.next();
   }
 
-  const auth = req.headers.get('authorization') || '';
-  const ok = auth === `Basic ${expected}`;
+  // 2) Basic Auth para el resto
+  const expected = process.env.BASIC_AUTH_B64; // base64 de "usuario:password"
+  if (!expected) return NextResponse.next();
 
-  if (ok) return NextResponse.next();
+  const auth = req.headers.get('authorization') || '';
+  if (auth === `Basic ${expected}`) return NextResponse.next();
 
   return new NextResponse('Auth required', {
     status: 401,

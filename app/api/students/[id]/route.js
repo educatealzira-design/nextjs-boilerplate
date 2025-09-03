@@ -1,5 +1,28 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
+
+const normalizeReferral = (v) => {
+  if (v == null || v === "") return null;
+  const enumObj =
+    (Prisma && Prisma.$Enums && Prisma.$Enums.ReferralSource)
+      ? Prisma.$Enums.ReferralSource
+      : (Prisma && Prisma.ReferralSource)
+        ? Prisma.ReferralSource
+        : null;
+  const allowed = enumObj ? Object.values(enumObj) : ["AMIGOS","COMPANEROS","INTERNET","OTRO"];
+  // Coincidencia exacta primero
+  if (allowed.includes(v)) return v;
+  // Coincidencia normalizada (quitar tildes y may/min)
+  const norm = String(v).normalize("NFD").replace(/\p{Diacritic}/gu, "").toUpperCase();
+  const map = Object.fromEntries(
+    allowed.map(x => [
+      String(x).normalize("NFD").replace(/\p{Diacritic}/gu, "").toUpperCase(),
+      x
+    ])
+  );
+  return map[norm] ?? null; // si no cuadra, lo dejamos en null (campo opcional)
+};
 
 export async function GET(_req, { params }) {
   const s = await prisma.student.findUnique({
@@ -57,7 +80,7 @@ export async function PUT(req, { params }) {
     ...(body.course !== undefined && { course: body.course }),
     ...(body.specialty !== undefined && { specialty: body.specialty ?? null }),
     ...(body.schoolSchedule !== undefined && { schoolSchedule: body.schoolSchedule ?? null }),
-    ...(body.referralSource !== undefined && { referralSource: body.referralSource ?? null }),
+    ...(body.referralSource !== undefined && { referralSource: normalizeReferral(body.referralSource) }),
     ...(desiredHoursNum !== undefined && { desiredHours: desiredHoursNum }),
     ...(sessionDurMinNum !== undefined && { sessionDurMin: sessionDurMinNum }),
     ...(billingRateNum !== undefined && { billingRateEurHour: billingRateNum }),
