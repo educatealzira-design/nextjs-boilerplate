@@ -2,31 +2,33 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 
+// Normaliza el valor a los canónicos de la BD: 'amigos' | 'companeros' | 'internet' | 'otro'
 const normalizeReferral = (v) => {
   if (v == null || v === "") return null;
-  const enumObj =
-    (Prisma && Prisma.$Enums && Prisma.$Enums.ReferralSource)
-      ? Prisma.$Enums.ReferralSource
-      : (Prisma && Prisma.ReferralSource)
-        ? Prisma.ReferralSource
-        : null;
-  const allowed = enumObj ? Object.values(enumObj) : ["AMIGOS","COMPANEROS","INTERNET","OTRO"];
-  // Coincidencia exacta primero
-  if (allowed.includes(v)) return v;
-  // Coincidencia normalizada (quitar tildes y may/min)
-  const norm = String(v).normalize("NFD").replace(/\p{Diacritic}/gu, "").toUpperCase();
-  const map = Object.fromEntries(
-    allowed.map(x => [
-      String(x).normalize("NFD").replace(/\p{Diacritic}/gu, "").toUpperCase(),
-      x
-    ])
-  );
-  return map[norm] ?? null; // si no cuadra, lo dejamos en null (campo opcional)
+  const key = String(v)
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toUpperCase()
+    .trim();
+
+  const map = {
+    AMIGO: "amigos",
+    AMIGOS: "amigos",
+    COMPANERO: "companeros",
+    COMPANEROS: "companeros",
+    COMPANERAS: "companeros",
+    COMPANERA: "companeros",
+    INTERNET: "internet",
+    OTRO: "otro",
+    OTRA: "otro",
+  };
+  return map[key] ?? null; // si no cuadra, lo guardamos como null (opcional)
 };
 
-export async function GET(_req, { params }) {
+export async function GET(_req, ctx) {
+  const { id } = await ctx.params;   
   const s = await prisma.student.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: { extras: true, subjects: true, schoolBlocks: true },
   });
   if (!s) return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -34,7 +36,8 @@ export async function GET(_req, { params }) {
 }
 
 // PUT /api/students/:id
-export async function PUT(req, { params }) {
+export async function PUT(req, ctx) {
+  const { id } = await ctx.params;
   let body;
   try {
     body = await req.json();
@@ -135,7 +138,7 @@ export async function PUT(req, { params }) {
 
   try {
     const updated = await prisma.student.update({
-      where: { id: params.id },
+      where: { id },
       data,
       include: { extras: true, subjects: true, schoolBlocks: true },
     });
@@ -150,7 +153,8 @@ export async function PUT(req, { params }) {
   }
 }
 
-export async function DELETE(_req, { params }) {
-  await prisma.student.delete({ where: { id: params.id } });
+export async function DELETE(_req, ctx) {
+  const { id } = await ctx.params;
+  await prisma.student.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }

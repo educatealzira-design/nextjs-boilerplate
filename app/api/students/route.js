@@ -5,26 +5,27 @@ import { Prisma } from "@prisma/client";
 
 // Normaliza el valor recibido a uno válido del enum ReferralSource
 // Normaliza a un valor válido del enum del cliente Prisma (v6 usa $Enums)
+// Normaliza el valor a los canónicos de la BD: 'amigos' | 'companeros' | 'internet' | 'otro'
 const normalizeReferral = (v) => {
   if (v == null || v === "") return null;
-  const enumObj =
-    (Prisma && Prisma.$Enums && Prisma.$Enums.ReferralSource)
-      ? Prisma.$Enums.ReferralSource
-      : (Prisma && Prisma.ReferralSource)
-        ? Prisma.ReferralSource
-        : null;
-  const allowed = enumObj ? Object.values(enumObj) : ["AMIGOS","COMPANEROS","INTERNET","OTRO"];
-  // Coincidencia exacta primero
-  if (allowed.includes(v)) return v;
-  // Coincidencia normalizada (quitar tildes y may/min)
-  const norm = String(v).normalize("NFD").replace(/\p{Diacritic}/gu, "").toUpperCase();
-  const map = Object.fromEntries(
-    allowed.map(x => [
-      String(x).normalize("NFD").replace(/\p{Diacritic}/gu, "").toUpperCase(),
-      x
-    ])
-  );
-  return map[norm] ?? null; // si no cuadra, lo dejamos en null (campo opcional)
+  const key = String(v)
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toUpperCase()
+    .trim();
+
+  const map = {
+    AMIGO: "amigos",
+    AMIGOS: "amigos",
+    COMPANERO: "companeros",
+    COMPANEROS: "companeros",
+    COMPANERAS: "companeros",
+    COMPANERA: "companeros",
+    INTERNET: "internet",
+    OTRO: "otro",
+    OTRA: "otro",
+  };
+  return map[key] ?? null; // si no cuadra, lo guardamos como null (opcional)
 };
 
 export async function GET(req) {
@@ -68,7 +69,7 @@ export async function POST(req) {
       course: body.course,
       specialty: body.specialty ?? null,
       schoolSchedule: body.schoolSchedule ?? null,
-      referralSource: normalizeReferral(body.ReferralSource),
+      referralSource: normalizeReferral(body.referralSource),
       desiredHours: body.desiredHours ?? null,
       extras: {
         create: (body.extras || []).map((e) => ({
