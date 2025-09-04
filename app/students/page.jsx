@@ -56,7 +56,7 @@ function StudentForm({ initial, onCancel, onSaved }) {
   const [form, setForm] = useState(() => initial || {
     fullName: '', phone: '', address: '', guardianName: '', guardianPhone: '',
     school: '', course: '', specialty: '', schoolBlocks: [], referralSource: '',
-    desiredHours: '', extras: [], subjects: [],
+    desiredHours: '', extras: [], subjects: [], notes: '',
   });
   
   function setField(k, v) { setForm(f => ({ ...f, [k]: v })); }
@@ -226,6 +226,16 @@ function StudentForm({ initial, onCancel, onSaved }) {
           <div className={styles.formRow}>
             <label className={styles.label}>Especialidad (si es Bachiller)</label>
             <input value={form.specialty||''} onChange={e=>setField('specialty', e.target.value)} placeholder="Ciencias / Humanidades..." className={styles.input}/>
+          </div>
+          <div className={`${styles.formRow} ${styles.span2}`}>
+            <label className={styles.label}>Comentario</label>
+            <textarea
+              rows={4}
+              value={form.notes || ''}
+              onChange={e => setField('notes', e.target.value)}
+              className={styles.textarea}
+              placeholder="Observaciones, disponibilidad especial, preferencias, etc."
+            />
           </div>
 
           {/* HORARIO ESCOLAR NUEVO */}
@@ -439,7 +449,12 @@ export default function StudentsPage() {
                 </ul>
             </div>
         )}
-        </div>
+        {s.notes && (
+          <div className={styles.span2}>
+            <span className={styles.muted}>Comentario:</span> {s.notes}
+          </div>
+        )}
+      </div>
     );
 }
 

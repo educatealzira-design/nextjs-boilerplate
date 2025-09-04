@@ -71,6 +71,7 @@ export async function POST(req) {
       schoolSchedule: body.schoolSchedule ?? null,
       referralSource: normalizeReferral(body.referralSource),
       desiredHours: body.desiredHours ?? null,
+      notes: body.notes ?? null,
       extras: {
         create: (body.extras || []).map((e) => ({
           label: e.label,

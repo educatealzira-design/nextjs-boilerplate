@@ -85,6 +85,7 @@ export async function PUT(req, ctx) {
     ...(body.schoolSchedule !== undefined && { schoolSchedule: body.schoolSchedule ?? null }),
     ...(body.referralSource !== undefined && { referralSource: normalizeReferral(body.referralSource) }),
     ...(desiredHoursNum !== undefined && { desiredHours: desiredHoursNum }),
+    ...(body.notes !== undefined && { notes: body.notes ?? null }),
     ...(sessionDurMinNum !== undefined && { sessionDurMin: sessionDurMinNum }),
     ...(billingRateNum !== undefined && { billingRateEurHour: billingRateNum }),
 

@@ -25,6 +25,7 @@ model Student {
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
   billingRateEurHour Float?
+  notes              String?  @db.Text 
   extras             Extracurricular[]
   invoice            Invoice[]
   lessons            Lesson[]
