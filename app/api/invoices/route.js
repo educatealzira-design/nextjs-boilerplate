@@ -9,20 +9,6 @@ export async function GET(req) {
     const where = month ? { yearMonth: month } : {};
     const invoices = await prisma.invoice.findMany({
      where,
-     include: {
-       student: {
-         select: {
-           id: true,
-           fullName: true,
-           course: true,
-           phone: true,
-           billingRateEurHour: true,
-           desiredHours: true,
-           weeklyHours: true,       // por si lo tienes con este nombre
-           hoursPerWeek: true,      // o este…
-         }
-       }
-     },
      orderBy: [{ yearMonth: "desc" }, { createdAt: "desc" }],
    });
     return NextResponse.json(invoices);
