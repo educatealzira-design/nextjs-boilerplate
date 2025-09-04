@@ -1,21 +1,28 @@
 // middleware.js
 import { NextResponse } from 'next/server';
 
-// ⛔️ No ejecutes el middleware en /api/** (ni en estáticos)
+// APLICAR A TODO (salimos dentro para API); no intentes excluir /api aquí.
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/:path*'],
 };
 
 export default function middleware(req) {
-  const { pathname } = new URL(req.url);
+  // Usa nextUrl que es lo recomendado y evita sorpresas con URL()
+  const { pathname } = req.nextUrl;
 
-  // Cinturón y tirantes: si aun así entra, SAL de /api/**
-  if (pathname.startsWith('/api/')) {
+  // 🚪 SALIDA INMEDIATA para API y rutas técnicas
+  if (
+    pathname.startsWith('/api/') ||      // tus endpoints
+    pathname === '/api' ||               // por si acaso
+    pathname.startsWith('/_next/') ||    // estáticos Next
+    pathname === '/favicon.ico' ||       // favicon
+    /\.[a-z0-9]+$/i.test(pathname)       // ficheros con extensión (.js,.css,.png,…)
+  ) {
     return NextResponse.next();
   }
 
-  // Basic Auth sólo para páginas (no API)
-  const expected = process.env.BASIC_AUTH_B64; // base64 de "usuario:password"
+  // 🔐 Basic Auth solo para PÁGINAS
+  const expected = process.env.BASIC_AUTH_B64; // base64("usuario:password")
   if (!expected) return NextResponse.next();
 
   const auth = req.headers.get('authorization') || '';
