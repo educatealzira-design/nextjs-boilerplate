@@ -209,6 +209,40 @@
 .savedPill { margin-left:8px; padding:2px 6px; border-radius:9999px; background:#16a34a; color:#fff; font-weight:600; font-size:11px; }
 
 
+/* =======para que se haga grande las casillas del horario======= */
+/* La parrilla principal: que las filas crezcan según contenido */
+.scheduleGrid {
+  /* si ya la tienes, añade estas dos líneas: */
+  grid-auto-rows: minmax(64px, auto); /* altura base 64px, pero puede crecer */
+  align-items: stretch;
+}
+
+/* La celda "drop" no debe forzar altura fija ni recortar contenido */
+.droppableCell {
+  height: auto;          /* quitar si estaba fija, ej. 64px/80px */
+  min-height: 64px;      /* altura base agradable */
+  overflow: visible;     /* importante: no ocultes los eventos extras */
+}
+
+/* El contenedor interno apila eventos en columna */
+.cellInner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;              /* separa tarjetas */
+}
+
+/* La tarjeta del evento debe dejar crecer su alto */
+.eventBlock {
+  height: auto;          /* por si estaba fijo */
+  overflow: visible;     /* evita cortes del popover/botones */
+}
+
+/* (opcional) Si usas estilos por profesor, que no colapsen altura */
+.rowNuria,
+.rowSanti {
+  height: auto;
+  min-height: 64px;
+}
 
 
 
