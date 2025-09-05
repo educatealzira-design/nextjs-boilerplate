@@ -225,33 +225,65 @@ export default function Page(){
     });
   }, [weekStart]);
 
-  // EXPORTAR A PDF
+  // EXPORTAR A PDF — encajar TODO (contain), pegado arriba
   async function exportElementToPdf(el, fileName){
     if (!el) return;
     const [{ default: html2canvas }, jsPDFmod] = await Promise.all([
       import('html2canvas'),
       import('jspdf')
     ]);
-    const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+
+    // Limpia márgenes del contenedor, pero NO forces altura
+    const prev = {
+      margin: el.style.margin,
+      padding: el.style.padding,
+      width: el.style.width,
+      boxSizing: el.style.boxSizing
+    };
+    el.style.margin = '0';
+    el.style.padding = '0';
+    el.style.boxSizing = 'border-box';
+    // (no tocar el height: dejamos que mida lo que necesite)
+
+    await new Promise(r => requestAnimationFrame(r));
+
+    const canvas = await html2canvas(el, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      useCORS: true,
+      // asegura que capture todo el ancho/alto real del nodo
+      windowWidth:  el.scrollWidth,
+      windowHeight: el.scrollHeight,
+      scrollY: -window.scrollY
+    });
     const imgData = canvas.toDataURL('image/png');
 
     const pdf = new jsPDFmod.jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
 
-    // Escala manteniendo proporción y encajando en una sola página
-    let imgW = pageW * 0.98;
-    let imgH = (canvas.height * imgW) / canvas.width;
-    if (imgH > pageH * 0.98) {
-      imgH = pageH * 0.98;
-      imgW = (canvas.width * imgH) / canvas.height;
-    }
-    const x = (pageW - imgW) / 2;
-    const y = (pageH - imgH) / 2;
+    // === Escalado CONTAIN, alineado arriba ===
+    const cw = canvas.width;
+    const ch = canvas.height;
+    const scale = Math.min(pageW / cw, pageH / ch);  // cabe todo (sin recortes)
+    const imgW = cw * scale;
+    const imgH = ch * scale;
+
+    const x = (pageW - imgW) / 2; // centrado horizontal → las horas no se cortan
+    const y = 0;                  // pegado arriba
 
     pdf.addImage(imgData, 'PNG', x, y, imgW, imgH, undefined, 'FAST');
     pdf.save(fileName);
+
+    // Restaurar estilos
+    el.style.margin    = prev.margin;
+    el.style.padding   = prev.padding;
+    el.style.width     = prev.width;
+    el.style.boxSizing = prev.boxSizing;
   }
+
+
+
 
   async function exportTeacher(teacherKey){
     const el = teacherKey === 'NURIA' ? exportRefNuria.current : exportRefSanti.current;
@@ -513,50 +545,112 @@ export default function Page(){
     return { ok:true };
   }
 
+  // Devuelve "Nombre Apellido" (primer nombre + primer apellido)
+  // Ignora conectores típicos en español para el apellido compuesto.
+  function shortOneSurname(fullName = '') {
+    const parts = String(fullName).trim().split(/\s+/);
+    if (parts.length === 0) return '';
+    const name = parts[0];
+
+    // El primer apellido es el primer token no conector tras el nombre
+    const connectors = new Set(['de','del','la','las','los','y','da','do','das','dos','du']);
+    let surname = '';
+    for (let i = 1; i < parts.length; i++) {
+      const p = parts[i].toLowerCase();
+      if (!connectors.has(p)) { surname = parts[i]; break; }
+    }
+    return surname ? `${name} ${surname}` : name;
+  }
+
   function ExportGrid({ teacherKey, lessons, students }) {
     const timeSlots = useMemo(()=> range(toMinutes(START_HOUR), toMinutes(END_HOUR), SLOT_MIN), []);
+    // helper: "Nombre Apellido"
+    function shortOneSurname(fullName = '') {
+      const parts = String(fullName).trim().split(/\s+/);
+      if (!parts.length) return '';
+      const name = parts[0];
+      const connectors = new Set(['de','del','la','las','los','y','da','do','das','dos','du']);
+      let surname = '';
+      for (let i = 1; i < parts.length; i++) {
+        const p = parts[i].toLowerCase();
+        if (!connectors.has(p)) { surname = parts[i]; break; }
+      }
+      return surname ? `${name} ${surname}` : name;
+    }
+
     return (
       <div className={styles.exportRoot}>
         <div className={styles.exportHeader}>
           Horario — {teacherKey === 'NURIA' ? 'Nuria' : 'Santi'}
         </div>
 
-        <div className={styles.exportGrid} style={{ gridTemplateColumns: `120px repeat(${DAYS.length}, 1fr)` }}>
-          {/* Cabecera días */}
+        {/* === Mismo layout que el tablero: izquierda días, arriba horas === */}
+        <div
+          className={styles.exportGridBoard}
+          style={{ gridTemplateColumns: `140px repeat(${timeSlots.length}, 1fr)` }}
+        >
+          {/* Fila 1: cabecera de horas */}
           <div></div>
-          {weekDates.map(d => (
-            <div key={`day-${d.key}`} className={`${styles.dayHeader} ${styles.exportDayHeader}`}>{d.pretty}</div>
-          ))}
-          {/* Filas por hora */}
           {timeSlots.map(start => (
-            <React.Fragment key={start}>
-              <div className={styles.exportHour}>{minutesToLabel(start)}</div>
-              {DAYS.map(d => {
-                const here = lessons.filter(l => l.teacher===teacherKey && l.dayOfWeek===d.key && l.startMin===start);
+            <div key={`h-${start}`} className={styles.dayHeader}>
+              {minutesToLabel(start)}
+            </div>
+          ))}
+
+          {/* Filas: por cada día, una fila para ESTE profesor a lo largo de TODAS las horas */}
+          {DAYS.map((d, di) => (
+            <React.Fragment key={`day-${d.key}`}>
+              {/* Celda fija izquierda: Día + Profe */}
+              <div className={`${styles.dayHeader} ${styles.exportLeftHeader}`}>
+                <div className={styles.exportLeftHeaderDay}>{weekDates[di].pretty}</div>
+                <div className={styles.exportLeftHeaderTeacher}>
+                  <span className={styles.teacherChip}>
+                    {teacherKey === 'NURIA' ? 'Nuria' : 'Santi'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Celdas del día a través de TODAS las horas */}
+              {timeSlots.map(start => {
+                const here = lessons.filter(
+                  l => l.teacher === teacherKey && l.dayOfWeek === d.key && l.startMin === start
+                );
+
                 const hasConflict = here.some(ls => {
-                  const st = students.find(s=>s.id===ls.studentId);
-                  if(!st) return false;
-                  return (st.extras||[]).some(ex =>
-                    ex.dayOfWeek===ls.dayOfWeek &&
+                  const st = students.find(s => s.id === ls.studentId);
+                  if (!st) return false;
+                  return (st.extras || []).some(ex =>
+                    ex.dayOfWeek === ls.dayOfWeek &&
                     overlaps(ls.actualStartMin ?? ls.startMin, ls.actualDurMin ?? ls.durMin, ex.startMin, ex.durMin)
                   );
                 });
+
                 return (
-                  <div key={`${teacherKey}-${d.key}-${start}`} className={`${styles.exportCell} ${teacherKey==='NURIA'?styles.exportCellNuria:styles.exportCellSanti}`}>
+                  <div
+                    key={`${teacherKey}-${d.key}-${start}`}
+                    className={`${styles.exportCell} ${teacherKey === 'NURIA' ? styles.exportCellNuria : styles.exportCellSanti}`}
+                  >
                     {hasConflict && <div className={styles.exportConflict} />}
                     <div className={styles.exportStack}>
                       {here.map(ls => {
-                        const st = students.find(s=>s.id===ls.studentId);
+                        const st = students.find(s => s.id === ls.studentId);
                         const displayStart = ls.actualStartMin ?? ls.startMin;
                         const displayDur   = ls.actualDurMin ?? ls.durMin;
+
                         return (
-                          <div key={ls.id} className={`${styles.exportEvent} ${teacherKey==='NURIA'?styles.eventNuria:styles.eventSanti}`}>
-                            <div className={`${styles.exportEventName} ${/* rojo si conflicto */ (hasConflict? styles.conflictName : '')}`}>
-                              {st?.fullName || '(Alumno)'}
+                          <div
+                            key={ls.id}
+                            className={`${styles.exportEvent} ${teacherKey==='NURIA' ? styles.eventNuria : styles.eventSanti}`}
+                          >
+                            <div className={`${styles.exportEventName} ${hasConflict ? styles.conflictName : ''}`}>
+                              {shortOneSurname(st?.fullName || '(Alumno)')}
                             </div>
-                            <div className={styles.exportEventMeta}>
-                              {minutesToLabel(displayStart)} · {displayDur}m
-                            </div>
+
+                            {displayDur === 90 && (
+                              <div className={styles.exportEventMeta}>
+                                {minutesToLabel(displayStart)} · {displayDur}m
+                              </div>
+                            )}
                           </div>
                         );
                       })}
