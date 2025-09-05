@@ -77,7 +77,9 @@ export default function InvoicesSendPage(){
   const [month, setMonth] = useState(()=>{
     const now = new Date(); const y=now.getFullYear(); const m=String(now.getMonth()+1).padStart(2,"0"); return `${y}-${m}`;
   });
-  const [items, setItems] = useState([]); // {invoiceId, studentId, fullName, phone, amount, status}
+    const [items, setItems] = useState([]); // {invoiceId, studentId, fullName, phone, amount, status, course, guardianName}
+  const [q, setQ] = useState("");           // 🔎 filtro texto (igual que receipts)
+  const [onlyWithPhone, setOnlyWithPhone] = useState(false); // ☎️ opcional
   function setLocalStatus(studentId, newStatus) {
     setItems(prev =>
       prev.map(x => x.studentId === studentId ? { ...x, status: newStatus } : x)
@@ -147,7 +149,21 @@ export default function InvoicesSendPage(){
   useEffect(()=>{ load(); }, [month]);
 
   // Igual que "Enviar horario": grid de TODAS las tarjetas (ocultamos las que no tienen teléfono)
-  const filtered = useMemo(()=> items, [items]);
+  // === FILTRO (igual que receipts: busca por nombre o curso) ===
+  const filtered = useMemo(()=>{
+    const t = q.toLowerCase().trim();
+    return items
+      .filter(it => {
+        if (onlyWithPhone && !it.phone) return false;
+        if (!t) return true;
+        return (
+          String(it.fullName||"").toLowerCase().includes(t) ||
+          String(it.course||"").toLowerCase().includes(t)
+        );
+      })
+      .sort((a,b)=> a.fullName.localeCompare(b.fullName, "es"));
+  }, [items, q, onlyWithPhone]);
+
   function firstName(s = "") {
     return String(s).trim().split(/\s+/)[0] || "";
   }
@@ -248,7 +264,19 @@ export default function InvoicesSendPage(){
             Abrir WhatsApp Web
           </a>
           <Link href="/" className={styles.btnPrimary}>Horario</Link>
-          <div className={styles.weekBadge}>Mes: {fmtMonthHuman(month)}</div>
+          {/* === CONTROLES DE FILTRO (como en receipts) === */}          
+          <input
+            placeholder="Buscar nombre o curso..."
+            value={q}
+            onChange={e=>setQ(e.target.value)}
+            className={styles.input}
+            style={{
+              fontSize: "12px",
+              padding: "8px 6px",
+              width: "200px",
+              marginLeft: "8px"
+            }}
+          />
         </div>
       </div>
       {/* === CONTENIDO A PANTALLA COMPLETA: grid de tarjetas (idéntico patrón) === */}
