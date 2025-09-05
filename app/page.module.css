@@ -179,6 +179,7 @@
 
 /* ======= EXPORT (PDF) ======= */
 .exportGridBoard {
+  margin: 5px;
   display: grid;
   grid-auto-rows: minmax(48px, auto);  /* cada franja crece según contenido */
   align-items: stretch;
@@ -209,15 +210,16 @@
 .exportStack {
   display: flex;
   flex-wrap: wrap;          /* permite varias líneas */
-  gap: 4px 6px;             /* [fila, columna] */
+  row-gap: 3px; 
   align-items: flex-start;
 }
 
+/* Cada “burbujita” (2 por línea) */
 .exportEvent {
   box-sizing: border-box;
-  flex: 0 0 calc(50% - 6px);  /* 2 por línea */
-  max-width: calc(50% - 6px);
-  min-height: 24px;
+  flex: 0 0 calc(50% - 3px);  /* 2 por línea */
+  max-width: calc(50% - 3px);
+  min-height: 20px;
 
   display: flex;
   flex-direction: column;
@@ -225,18 +227,18 @@
   justify-content: center;  /* centro vertical */
   text-align: center;
   
-  padding: 2px 6px;
+  padding: 2px 2px;
   line-height: 1.1;
   border-radius: 10px;
 }
-
+/* Nombre más grande */
 .exportEventName {
-  font-size: 10px;          /* compacto */
+  font-size: 12px;          /* compacto */
   font-weight: 600;
   white-space: normal;
   word-break: break-word;
 }
-
+/* Meta (solo 90m), pequeña y pegada al nombre */
 .exportEventMeta {
   font-size: 9px;
   opacity: 0.8;

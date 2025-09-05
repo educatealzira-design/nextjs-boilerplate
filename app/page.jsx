@@ -546,20 +546,23 @@ export default function Page(){
   }
 
   // Devuelve "Nombre Apellido" (primer nombre + primer apellido)
-  // Ignora conectores típicos en español para el apellido compuesto.
-  function shortOneSurname(fullName = '') {
-    const parts = String(fullName).trim().split(/\s+/);
-    if (parts.length === 0) return '';
-    const name = parts[0];
+  function formatStudentName(st, siblings) {
+    if (!st?.fullName) return '(Alumno)';
 
-    // El primer apellido es el primer token no conector tras el nombre
-    const connectors = new Set(['de','del','la','las','los','y','da','do','das','dos','du']);
-    let surname = '';
-    for (let i = 1; i < parts.length; i++) {
-      const p = parts[i].toLowerCase();
-      if (!connectors.has(p)) { surname = parts[i]; break; }
+    const parts = st.fullName.trim().split(/\s+/);
+    const name = parts[0];                 // primer nombre
+    const surname = parts[1] || '';        // primer apellido (si existe)
+
+    // ¿Cuántos en esta franja comparten este nombre?
+    const sameNameCount = siblings.filter(other => {
+      if (!other?.fullName) return false;
+      return other.fullName.trim().split(/\s+/)[0] === name;
+    }).length;
+
+    if (sameNameCount > 1 && surname) {
+      return `${name} ${surname.charAt(0)}.`;  // Ej: "Paula S."
     }
-    return surname ? `${name} ${surname}` : name;
+    return name;                               // Ej: "Paula"
   }
 
   function ExportGrid({ teacherKey, lessons, students }) {
@@ -634,6 +637,7 @@ export default function Page(){
                     <div className={styles.exportStack}>
                       {here.map(ls => {
                         const st = students.find(s => s.id === ls.studentId);
+                        const siblings = here.map(l => students.find(s => s.id === l.studentId));
                         const displayStart = ls.actualStartMin ?? ls.startMin;
                         const displayDur   = ls.actualDurMin ?? ls.durMin;
 
@@ -643,7 +647,7 @@ export default function Page(){
                             className={`${styles.exportEvent} ${teacherKey==='NURIA' ? styles.eventNuria : styles.eventSanti}`}
                           >
                             <div className={`${styles.exportEventName} ${hasConflict ? styles.conflictName : ''}`}>
-                              {shortOneSurname(st?.fullName || '(Alumno)')}
+                              {formatStudentName(st, siblings)}
                             </div>
 
                             {displayDur === 90 && (
