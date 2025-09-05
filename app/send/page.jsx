@@ -186,13 +186,24 @@ function SendInner(){
     return /\bprim/.test(c);
   }
 
+  // si es 1º o 2º de ESO (para usar el mensaje a padres cuando no hay clases)
+  function isLowerESO(student) {
+    // normaliza: minúsculas y sin º/ª para simplificar patrones
+    const c = String(student?.course || "")
+      .toLowerCase()
+      .replace(/[\u00BA\u00AA]/g, ""); // elimina º ª
+
+    // cubre variantes: "1 eso", "1º eso", "1ºeso", "1 de eso", "2 eso", etc.
+    return /\b(?:1|2)\s*(?:o|\b)?\s*(?:de\s*)?eso\b/.test(c);
+  }
+
   function buildMessage(student, items){
     const child = firstName(student.fullName);
     const parent = firstName(student.guardianName) || "familia";
 
     // Formatea el cuerpo con las clases
     if (!items || items.length === 0) {
-      if (isPrimary(student)) {
+      if (isPrimary(student) || isLowerESO(student)) {
         return `Hola ${parent}, esta semana ${child} no tiene clases programadas.`;
       }
       return `Hola ${child}, esta semana no tienes clases programadas.`;
@@ -209,10 +220,10 @@ function SendInner(){
 
     // 👉 Si es Primaria: mensaje a padre/madre con “tendrá”
     if (isPrimary(student)) {
-      return `Hola ${parent}, esta semana ${child} tendrá clase ${body}. Muchas gracias.`;
+      return `Hola ${parent}, ${child} tendrá clase ${body}. Muchas gracias.`;
     }
     // Secundaria/Bach/etc.: mensaje al alumno con “tienes”
-    return `Hola ${child}, esta semana tienes clase ${body}. Muchas gracias.`;
+    return `Hola ${child}, tienes clase ${body}. Muchas gracias.`;
   }
 
   return (
