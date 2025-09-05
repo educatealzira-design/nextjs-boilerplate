@@ -1,6 +1,9 @@
 // app/api/invoices/route.js
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { upsertInvoiceRow } from "@/lib/sheetsInvoices";
 
 export async function GET(req) {
   try {
@@ -10,6 +13,7 @@ export async function GET(req) {
     const invoices = await prisma.invoice.findMany({
      where,
      orderBy: [{ yearMonth: "desc" }, { createdAt: "desc" }],
+     include: { student: true },
    });
     return NextResponse.json(invoices);
   } catch (err) {
@@ -20,17 +24,12 @@ export async function GET(req) {
 
 export async function POST(req) {
   let body;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
-  }
+  try { body = await req.json(); }
+  catch { return NextResponse.json({ error: "JSON inválido" }, { status: 400 }); }
 
   const required = ["studentId", "yearMonth", "rate", "adjustMin", "totalMin", "amount", "status"];
   for (const k of required) {
-    if (!(k in body)) {
-      return NextResponse.json({ error: `Falta campo: ${k}` }, { status: 400 });
-    }
+    if (!(k in body)) return NextResponse.json({ error: `Falta campo: ${k}` }, { status: 400 });
   }
 
   const rate = Number(body.rate);
@@ -44,11 +43,10 @@ export async function POST(req) {
     return NextResponse.json({ error: "yearMonth debe tener formato YYYY-MM" }, { status: 400 });
   }
 
-  // timestamps segun status
   const status = body.status || "PENDIENTE";
   const now = new Date();
-  const sentAt  = status === "ENVIADO" || status === "PAGADO" ? now : undefined;
-  const paidAt  = status === "PAGADO" ? now : undefined;
+  const sentAt = status === "ENVIADO" || status === "PAGADO" ? now : undefined;
+  const paidAt = status === "PAGADO" ? now : undefined;
 
   try {
     const invoice = await prisma.invoice.upsert({
@@ -60,9 +58,8 @@ export async function POST(req) {
         amount,
         status,
         paymentMethod: typeof body.paymentMethod === "string" ? body.paymentMethod : undefined,
-        // no sobreescribas sentAt/paidAt si ya existían y el nuevo status no lo requiere
-        ...(sentAt  ? { sentAt } : {}),
-        ...(paidAt  ? { paidAt } : {}),
+        ...(sentAt ? { sentAt } : {}),
+        ...(paidAt ? { paidAt } : {}),
       },
       create: {
         studentId: body.studentId,
@@ -76,7 +73,12 @@ export async function POST(req) {
         sentAt: sentAt ?? null,
         paidAt: paidAt ?? null,
       },
+      include: { student: true }, // ← incluimos alumno para volcar a Sheets
     });
+
+    // 🔥 Actualiza/añade la fila en la pestaña "Recibos YYYY-MM"
+    await upsertInvoiceRow(invoice);
+
     return NextResponse.json(invoice, { status: 200 });
   } catch (err) {
     console.error("POST /api/invoices error", err);

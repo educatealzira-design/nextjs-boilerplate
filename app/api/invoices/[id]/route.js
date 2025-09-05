@@ -1,6 +1,10 @@
 // app/api/invoices/[id]/route.js
+export const runtime = "nodejs";
+
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { upsertInvoiceRow } from "@/lib/sheetsInvoices";
+
 
 export async function PATCH(req, ctx) {
   const { id } = await ctx.params;
@@ -31,7 +35,11 @@ export async function PATCH(req, ctx) {
   const updated = await prisma.invoice.update({
     where: { id },
     data,
+    include: { student: true },
   });
 
+  // 🔥 Refleja el cambio en la pestaña de su mes
+  await upsertInvoiceRow(updated);
+  
   return NextResponse.json(updated);
 }

@@ -2,6 +2,7 @@
 import prisma from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
+import { upsertStudentRow } from "@/lib/sheetsUpsert"; // ← NUEVO (importa el helper)
 
 // Normaliza el valor recibido a uno válido del enum ReferralSource
 // Normaliza a un valor válido del enum del cliente Prisma (v6 usa $Enums)
@@ -81,10 +82,7 @@ export async function POST(req) {
         })),
       },
       subjects: {
-        // ← NUEVO
-        create: (body.subjects || []).map((s) => ({
-          name: s.name,
-        })),
+        create: (body.subjects || []).map((s) => ({ name: s.name })),
       },
       schoolBlocks: {
         create: (body.schoolBlocks || []).map((b) => ({
@@ -94,10 +92,12 @@ export async function POST(req) {
           endMin: Number(b.endMin),
         })),
       },
-      
     },
     include: { extras: true, subjects: true, schoolBlocks: true },
   });
+
+  // 🔥 Upsert directo en Sheets SOLO para este alumno
+  await upsertStudentRow(created);
 
   return NextResponse.json(created, { status: 201 });
 }

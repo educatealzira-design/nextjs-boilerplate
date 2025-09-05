@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { upsertStudentRow, markStudentRowDeleted } from "@/lib/sheetsUpsert"; // ← NUEVO
+
 
 // Normaliza el valor a los canónicos de la BD: 'amigos' | 'companeros' | 'internet' | 'otro'
 const normalizeReferral = (v) => {
@@ -36,6 +38,7 @@ export async function GET(_req, ctx) {
 }
 
 // PUT /api/students/:id
+// PUT /api/students/:id
 export async function PUT(req, ctx) {
   const { id } = await ctx.params;
   let body;
@@ -45,7 +48,6 @@ export async function PUT(req, ctx) {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
 
-  // Normalizaciones numéricas (permiten null)
   const toNumOrNull = (v) =>
     v === undefined ? undefined : v === null || v === "" ? null : Number(v);
 
@@ -72,7 +74,6 @@ export async function PUT(req, ctx) {
     );
   }
 
-  // Build de datos a actualizar (permite actualizaciones parciales)
   const data = {
     ...(body.fullName !== undefined && { fullName: body.fullName }),
     ...(body.phone !== undefined && { phone: body.phone ?? null }),
@@ -89,11 +90,10 @@ export async function PUT(req, ctx) {
     ...(sessionDurMinNum !== undefined && { sessionDurMin: sessionDurMinNum }),
     ...(billingRateNum !== undefined && { billingRateEurHour: billingRateNum }),
 
-    // Extras: si llega array, reemplaza todas
     ...(Array.isArray(body.extras)
       ? {
           extras: {
-            deleteMany: {}, // borra todas las extras actuales del alumno
+            deleteMany: {},
             create: body.extras.map((e) => ({
               label: e.label,
               dayOfWeek: Number(e.dayOfWeek),
@@ -104,21 +104,19 @@ export async function PUT(req, ctx) {
         }
       : {}),
 
-    // Subjects: si llega array, reemplaza todas
     ...(Array.isArray(body.subjects)
       ? {
           subjects: {
-            deleteMany: {}, // borra todas sus asignaturas actuales
+            deleteMany: {},
             create: body.subjects.map((s) => ({ name: s.name })),
           },
         }
       : {}),
-    
-      // SchoolBlocks: si llega array, reemplaza todos
-      ...(Array.isArray(body.schoolBlocks)
+
+    ...(Array.isArray(body.schoolBlocks)
       ? {
           schoolBlocks: {
-            deleteMany: {}, // borra todos los bloques actuales
+            deleteMany: {},
             create: body.schoolBlocks.map((b) => ({
               fromDay: Number(b.fromDay),
               toDay: Number(b.toDay),
@@ -143,9 +141,12 @@ export async function PUT(req, ctx) {
       data,
       include: { extras: true, subjects: true, schoolBlocks: true },
     });
+
+    // 🔥 Upsert directo en Sheets SOLO para este alumno
+    await upsertStudentRow(updated);
+
     return NextResponse.json(updated);
   } catch (err) {
-    // P2025 = record not found
     if (String(err?.code) === "P2025") {
       return NextResponse.json({ error: "not found" }, { status: 404 });
     }
@@ -157,5 +158,6 @@ export async function PUT(req, ctx) {
 export async function DELETE(_req, ctx) {
   const { id } = await ctx.params;
   await prisma.student.delete({ where: { id } });
+  await markStudentRowDeleted(id);
   return NextResponse.json({ ok: true });
 }

@@ -11,6 +11,11 @@ function toHHMM(mins){ const h=Math.floor(mins/60), m=mins%60; return `${String(
 function fmtMoney(n){ return new Intl.NumberFormat("es-ES", { style:"currency", currency:"EUR" }).format(n ?? 0); }
 function fmtMonthHuman(ym){ const [y,m]=ym.split("-").map(Number); const d=new Date(Date.UTC(y,(m-1),1)); return d.toLocaleDateString("es-ES",{month:"long",year:"numeric", timeZone:"UTC"}); }
 
+// Redondea a múltiplos de 0.5 (… ,0 o ,5)
+function roundToHalf(n){
+  return Math.round((Number(n)||0) * 2) / 2;
+}
+
 // Mensaje de cobro para copiar
 function firstName(s = "") {
   return String(s).trim().split(/\s+/)[0] || "";
@@ -228,7 +233,7 @@ export default function ReceiptsPage(){
       // >>> TARIFA: manual (rates) > BD > estándar por curso
       const fallbackCourseRate = defaultRateForStudent(st, desired);
       const rate = firstPositive(rates[st.id], st.billingRateEurHour, fallbackCourseRate);
-      const amount = rate * (totalMin/60);
+      const amount = roundToHalf(rate * (totalMin / 60));
       const inv = invoices.find(i=>i.studentId===st.id);
       const invId = inv?.id || null;
       const stStatus = status[st.id] || inv?.status || "PENDIENTE";
@@ -271,13 +276,19 @@ export default function ReceiptsPage(){
       const effectiveStatus = overrides.status ?? row.stStatus ?? (status[row.student.id] || "PENDIENTE");
       const effectiveMethod = overrides.paymentMethod ?? row.method ?? (paymentMethod[row.student.id] || "Transfer.");
 
+      const effectiveRate     = Number(overrides.rate ?? row.rate);
+      const effectiveTotalMin = Number(overrides.totalMin ?? row.totalMin);
+      const effectiveAmount   = (overrides.amount != null)
+        ? Number(overrides.amount)
+        : roundToHalf(effectiveRate * (effectiveTotalMin / 60));
+
       const payload = {
         studentId: row.student.id,
         yearMonth: month,
-        rate: overrides.rate ?? row.rate,
+        rate: effectiveRate,
         adjustMin: overrides.adjustMin ?? (adjustMin[row.student.id] ?? 0),
-        totalMin: overrides.totalMin ?? row.totalMin,
-        amount: overrides.amount ?? row.amount,
+        totalMin: effectiveTotalMin,
+        amount: effectiveAmount,
         status: effectiveStatus,
         paymentMethod: effectiveMethod,
       };
@@ -480,7 +491,7 @@ export default function ReceiptsPage(){
     const row = rows.find(r=>r.student.id===studentId);
     if (row){
       const newTotal = row.totalMinPlan + num;
-      const newAmount = row.rate * (newTotal/60);
+      const newAmount = roundToHalf(row.rate * (newTotal/60));
       queueSave({ ...row, totalMin: newTotal, amount: newAmount }, { totalMin: newTotal, amount: newAmount, adjustMin: num });
     }
   }
