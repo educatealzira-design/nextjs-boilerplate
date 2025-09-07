@@ -506,16 +506,17 @@ export default function ReceiptsPage(){
         <div className={styles.headerRow}>
           {/* Izquierda: título */}
           <div className={styles.titleLeft}>
-            <img src="/logo.png" alt="Edúcate" className={styles.logo}/>
+            <img src="/logo.png" alt="Edúcate" style={{ height:'85px', width:'auto'}}/>
           </div>
           {/* Derecha: botones + filtros */}
           <div className={styles.controls}>
             <div className={styles.controlsGroup}>
               <Link href="/" className={styles.btnOutline}>← Volver al horario</Link>
-              <Link href="/invoices" className={styles.btnPrimary}>WhatsApp (cobros)</Link>
+              <Link href="/invoices" className={styles.btnPrimarySend}>
+                <img src="/whatsapp.png" alt="WhatsApp cobros" style={{ height: '32px', width: '32px', display: 'block' }} />
+              </Link>
             </div>
             <div className={styles.controlsGroup}>
-              <label className={styles.label}>Mes</label>
               <input
                 type="month"
                 value={month}
@@ -523,7 +524,7 @@ export default function ReceiptsPage(){
                 className={styles.input}
               />
               <input
-                placeholder="Buscar nombre o curso..."
+                placeholder="Buscar..."
                 value={q}
                 onChange={e=>setQ(e.target.value)}
                 className={styles.input}

@@ -8,19 +8,29 @@
 /* ===== Cabecera ===== */
 .header{
   display:flex; flex-direction:column; gap:10px;
-  margin-bottom:12px;padding: 18px;
+  margin-bottom:12px;padding: 2px;
 }
 
 /* Botones (idénticos a otras páginas) */
-.btnPrimary, .btnOutline, .btn{
+.btnPrimary, .btn{
   appearance:none; border:1px solid var(--beige-200); margin: 4px;;
   background: var(--beige-300); color:#4a4a4a;
   padding:6px 10px; border-radius:14px; text-decoration:none;
   font-weight:600; line-height:1; cursor:pointer;
   transition: background .15s ease, border-color .15s ease, transform .05s ease, box-shadow .15s ease;
 }
+.btnOutline{
+  appearance:none;
+  background:#e5ded9; color:#444;
+  padding:6px 10px; border-radius:10px; text-decoration:none; cursor:pointer;
+}
 .btnPrimary:hover, .btnOutline:hover, .btn:hover{ background: var(--beige-100); transform: translateY(-1px); }
-
+.btnPrimarySend{
+  appearance:none; padding:4px 6px; border-radius:14px; text-decoration:none;
+}
+.btnPrimarySend:hover{
+  transform: scale(1.12);
+}
 .headerActions{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 
 /* Fila de cabecera: título a la izq, controles a la dcha */
@@ -64,17 +74,15 @@
 
 /* Filtros */
 .filters{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-.label{ font-size:12px; color:#444; }
 .input{
-  border:1px solid var(--border); border-radius:12px; padding:8px 12px; font:inherit; background:#fff; outline:none;
+  border:1px solid var(--border); border-radius:8px; padding:5px 8px; font:inherit; background:#f8f6f4; outline:none;
 }
 .input:focus{ border-color:#cfc7bd; box-shadow:0 0 0 3px rgba(217,209,200,.35); }
-.chk{ font-size:13px; color:#333; display:flex; align-items:center; gap:6px; }
 
 /* ===== Board / Tabla ===== */
 .board{
   background:#fff; border:1px solid var(--border); border-radius:12px;
-  overflow:auto; max-height: calc(100vh - 180px); 
+  overflow:auto; max-height: calc(100vh - 180px);
 }
 .board::-webkit-scrollbar{ height:10px; width:10px; }
 .board::-webkit-scrollbar-thumb{ background:var(--beige-200); border-radius:999px; }

@@ -1,8 +1,8 @@
 .container{
-  max-width:1120px;
-  margin:0 auto;
-  padding:16px;
-  
+  padding:40px;
+  background-image: url('/fondo.jpg');
+  background-size: cover;        
+  background-position: center; 
 }
 
 .header{
@@ -10,6 +10,7 @@
   flex-direction:column;
   gap:12px;
 }
+
 @media (min-width: 768px){
   .header{
     flex-direction:row;
@@ -18,14 +19,14 @@
   }
 }
 
-.title{ font-size:22px; font-weight:700; }
+.title{ margin-left:3px; font-size:27px; font-weight:700; }
 .subtitle{ font-size:13px; color:var(--muted); }
 
 .actions{ display:flex; gap:8px; }
 .input, .select{
   border:1px solid var(--border);
   border-radius: var(--radius);
-  padding:8px 8px;
+  padding:4px 8px;
   font: inherit;
   background:#f3f0ed;
 }
@@ -35,16 +36,14 @@
   border:1px solid var(--border);
   background:#fff;
 }
-.btnPrimary{ background:#2563eb; color:#fff; border-color:#2563eb; }
-.btnOutline{
-  display:inline-block;
-  margin-top:8px;
-  padding:6px 10px;
-  border:1px solid var(--border);
-  border-radius: var(--radius);
-  text-decoration:none;
-  color:#111;
+.btnPrimary, .btnOutline{
+  appearance:none; border:1px solid var(--beige-200);
+  background: var(--beige-300); color:#4a4a4a;
+  padding:10px 10px; border-radius:8px; text-decoration:none;
+  font-weight:600; line-height:1; cursor:pointer;
+  transition: background .15s ease, border-color .15s ease, transform .05s ease;
 }
+.btnPrimary:hover, .btnOutline:hover{ background: var(--beige-100); transform: translateY(-1px); }
 .linkButton{
   background:none;
   border:none;
@@ -70,9 +69,9 @@
 }
 
 .card{
-  background:#f3f0ed;
-  border:3px solid var(--border);
-  border-radius: var(--radius);
+  background:#fefdfc;
+  border:2px solid var(--border);
+  border-radius: 8px;
   padding:12px;
   box-shadow: 0 1px 1px rgba(96, 36, 36, 0.04);
   display:flex;

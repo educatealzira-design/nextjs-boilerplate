@@ -677,9 +677,11 @@ export default function Page(){
         {/* Cabecera */}
         <div className={styles.header}>
           <div className={styles.title}><img src="/logo.png" alt="Edúcate" style={{ height:'85px', width:'auto'}}/></div>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px'}}>
             <button className={styles.btnOutline}
-                    onClick={()=> setWeekStart(prev => addDays(prev, -7))}>← Semana</button>
+              onClick={()=> setWeekStart(prev => addDays(prev, -7))}>
+              <img src="/flechaI.png" alt="Semana anterior" style={{ height: '18px', width: '18px', display: 'block' }} />
+            </button>
 
             <div className={styles.weekBadge}>
               Semana: {ddmmyy(weekStart)} — {ddmmyy(addDays(weekStart, 4))}
@@ -687,9 +689,11 @@ export default function Page(){
             </div>
 
             <button className={styles.btnOutline}
-                    onClick={()=> setWeekStart(prev => addDays(prev, +7))}>Semana →</button>
+              onClick={()=> setWeekStart(prev => addDays(prev, +7))}>
+              <img src="/flechaD.png" alt="Semana siguiente" style={{ height: '18px', width: '18px', display: 'block' }} />
+            </button>
 
-            <button className={styles.btnPrimary}
+            <button className={styles.btnPrimaryGS}
                     onClick={async ()=>{
                       const w = toISODateLocal(weekStart);
                       const res = await fetch('/api/weeks', {
@@ -698,13 +702,19 @@ export default function Page(){
                       });
                       if (res.ok) setWeekSaved(true);
                     }}>
-              Guardar semana
+              <img src="/guardar.png" alt="Guardar Semana" style={{ height: '34px', width: '34px', display: 'block' }} />
             </button>
-            <button onClick={()=>exportTeacher('NURIA')} className={styles.btnOutline}>PDF Nuria</button>
-            <button onClick={()=>exportTeacher('SANTI')} className={styles.btnOutline}>PDF Santi</button>
-            <Link href={`/send?weekStart=${toISODateLocal(weekStart)}`} className={styles.btnPrimary}>Enviar horario</Link>
-            <Link href="/students" className={styles.btnPrimary}>BD</Link>
-            <Link href="/receipts" className={styles.btnPrimary}>Recibos</Link>
+            <button onClick={()=>exportTeacher('NURIA')} className={styles.btnOutlinePDF}>PDF Nuria</button>
+            <button onClick={()=>exportTeacher('SANTI')} className={styles.btnOutlinePDF}>PDF Santi</button>
+            <Link href={`/send?weekStart=${toISODateLocal(weekStart)}`} className={styles.btnPrimarySend}>
+              <img src="/whatsapp.png" alt="Enviar horario" style={{ height: '34px', width: '34px', display: 'block' }} />
+            </Link>
+            <Link href="/students" className={styles.btnPrimaryBD}>
+              <img src="/BD.png" alt="Base de datos" style={{ height: '34px', width: '34px', display: 'block' }} />
+            </Link>
+            <Link href="/receipts" className={styles.btnPrimaryRB}>
+              <img src="/recibo.png" alt="Recibos" style={{ height: '34px', width: '34px', display: 'block' }} />
+            </Link>
           </div>
         </div>
 

@@ -462,18 +462,15 @@ export default function StudentsPage() {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <div>
-          <h1 className={styles.title}>Alumnos</h1>
-          <p className={styles.subtitle}>Tarjetas con filtro por curso y búsqueda.</p>
-          <Link href="/" className={styles.btnOutline} title="Volver al horario">← Volver al horario</Link>
-        </div>
-        <div className={styles.actions}>
-          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar nombre, colegio, dirección..." className={styles.input}/>
-          <select value={course} onChange={e=>setCourse(e.target.value)} className={styles.select}>
-            <option value="">Todos los cursos</option>
-            {courses.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <button onClick={()=>setOpenForm({})} className={`${styles.btn} ${styles.btnPrimary}`}>Nuevo alumno</button>
+        <div className={styles.title}>Base de Datos Alumnos</div>
+          <div style={{ display: 'flex', gap: '8px'}}>
+            <Link href="/" className={styles.btnOutline}>← Volver al horario</Link>
+            <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar nombre, colegio, dirección..." className={styles.input}/>
+            <select value={course} onChange={e=>setCourse(e.target.value)} className={styles.select}>
+              <option value="">Curso</option>
+              {courses.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <button onClick={()=>setOpenForm({})} className={`${styles.btn} ${styles.btnPrimary}`}>Nuevo alumno</button>
         </div>
       </div>
 

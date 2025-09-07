@@ -235,10 +235,12 @@ function SendInner(){
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
           <Link href="/" className={styles.btnOutline}>← Volver al horario</Link>
-          <a href="https://web.whatsapp.com" target="_blank" rel="noopener noreferrer" className={styles.btnPrimary}>
-            Abrir WhatsApp Web
-          </a>
-          <Link href="/students" className={styles.btnPrimary}>BD</Link>
+          <Link href="https://web.whatsapp.com" target="_blank" rel="noopener noreferrer" className={styles.btnPrimarySend}>
+            <img src="/whatsapp.png" alt="Enviar horario" style={{ height: '34px', width: '34px', display: 'block' }} />
+          </Link>
+          <Link href="/students" className={styles.btnPrimaryBD}>
+              <img src="/BD.png" alt="Base de datos" style={{ height: '34px', width: '34px', display: 'block' }} />
+            </Link>
           <div className={styles.weekBadge}>
             Semana: {ddmmyy(weekStart)} — {ddmmyy(addDays(weekStart, 4))}
           </div>

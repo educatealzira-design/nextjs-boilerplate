@@ -260,19 +260,20 @@ export default function InvoicesSendPage(){
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
           <Link href="/receipts" className={styles.btnOutline}>← Recibos</Link>
-          <a href="https://web.whatsapp.com" target="_blank" rel="noopener noreferrer" className={styles.btnPrimary}>
-            Abrir WhatsApp Web
-          </a>
+          <Link href="https://web.whatsapp.com" target="_blank" rel="noopener noreferrer" className={styles.btnPrimarySend}>
+            <img src="/whatsapp.png" alt="Enviar horario" style={{ height: '34px', width: '34px', display: 'block' }} />
+          </Link>
           <Link href="/" className={styles.btnPrimary}>Horario</Link>
           {/* === CONTROLES DE FILTRO (como en receipts) === */}          
           <input
-            placeholder="Buscar nombre o curso..."
+            placeholder="Buscar..."
             value={q}
             onChange={e=>setQ(e.target.value)}
             className={styles.input}
             style={{
-              fontSize: "12px",
-              padding: "8px 6px",
+              background: 'var(--beige-50)',
+              fontSize: "13px",
+              padding: "6px 6px",
               width: "200px",
               marginLeft: "8px"
             }}
