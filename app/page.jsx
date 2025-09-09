@@ -546,23 +546,37 @@ export default function Page(){
   }
 
   // Devuelve "Nombre Apellido" (primer nombre + primer apellido)
-  function formatStudentName(st, siblings) {
+  function formatStudentName(st, firstNameCounts) {
     if (!st?.fullName) return '(Alumno)';
 
-    const parts = st.fullName.trim().split(/\s+/);
-    const name = parts[0];                 // primer nombre
-    const surname = parts[1] || '';        // primer apellido (si existe)
+    const normalize = (s = '') =>
+      String(s)
+        .normalize('NFD')
+        .replace(/\p{Diacritic}/gu, '')
+        .toLowerCase()
+        .trim();
 
-    // ¿Cuántos en esta franja comparten este nombre?
-    const sameNameCount = siblings.filter(other => {
-      if (!other?.fullName) return false;
-      return other.fullName.trim().split(/\s+/)[0] === name;
-    }).length;
+    const parts = String(st.fullName).trim().split(/\s+/);
+    if (!parts.length) return '(Alumno)';
 
-    if (sameNameCount > 1 && surname) {
-      return `${name} ${surname.charAt(0)}.`;  // Ej: "Paula S."
+    const firstName = parts[0];
+    const firstNameNorm = normalize(firstName);
+
+    // conectores que no cuentan como apellido
+    const CONNECTORS = new Set(['de','del','la','las','los','y','da','do','das','dos','du']);
+
+    // primer apellido "real"
+    let surname = '';
+    for (let i = 1; i < parts.length; i++) {
+      const p = parts[i];
+      if (!CONNECTORS.has(normalize(p))) { surname = p; break; }
     }
-    return name;                               // Ej: "Paula"
+
+    const count = firstNameCounts.get(firstNameNorm) || 0;
+    if (count > 1 && surname) {
+      return `${firstName} ${surname.charAt(0)}.`; // ej: "Paula S."
+    }
+    return firstName; // ej: "Paula"
   }
 
   function ExportGrid({ teacherKey, lessons, students }) {
@@ -580,6 +594,27 @@ export default function Page(){
       }
       return surname ? `${name} ${surname}` : name;
     }
+    
+    // normaliza un string para comparaciones (sin tildes, minúsculas, trim)
+    const normalize = (s = '') =>
+      String(s)
+        .normalize('NFD')
+        .replace(/\p{Diacritic}/gu, '')
+        .toLowerCase()
+        .trim();
+
+    // Mapa global: primerNombre(normalizado) -> conteo en TODO el horario
+    const firstNameCounts = React.useMemo(() => {
+      const m = new Map();
+      for (const ls of lessons) {
+        const st = students.find(s => s.id === ls.studentId);
+        const parts = String(st?.fullName || '').trim().split(/\s+/);
+        if (!parts.length) continue;
+        const firstNorm = normalize(parts[0]);
+        m.set(firstNorm, (m.get(firstNorm) || 0) + 1);
+      }
+      return m;
+    }, [lessons, students]);
 
     return (
       <div className={styles.exportRoot}>
@@ -647,7 +682,7 @@ export default function Page(){
                             className={`${styles.exportEvent} ${teacherKey==='NURIA' ? styles.eventNuria : styles.eventSanti}`}
                           >
                             <div className={`${styles.exportEventName} ${hasConflict ? styles.conflictName : ''}`}>
-                              {formatStudentName(st, siblings)}
+                              {formatStudentName(st, firstNameCounts)}
                             </div>
 
                             {displayDur === 90 && (
