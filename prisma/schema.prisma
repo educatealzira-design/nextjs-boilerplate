@@ -25,7 +25,7 @@ model Student {
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
   billingRateEurHour Float?
-  notes              String?  @db.Text 
+  notes              String?
   extras             Extracurricular[]
   invoice            Invoice[]
   lessons            Lesson[]
@@ -93,6 +93,7 @@ model Lesson {
   weekStart      DateTime?
   student        Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
+  @@unique([studentId, weekStart, dayOfWeek, startMin], name: "uniq_student_slot_per_week", map: "uniq_student_slot_per_week")
   @@index([weekStart, dayOfWeek, startMin, teacher])
   @@index([studentId, dayOfWeek, startMin])
   @@index([teacher, dayOfWeek, startMin])

@@ -69,18 +69,33 @@ export async function POST(req) {
     weekStart,
   };
 
-  // Bloqueo: mismo alumno en la MISMA FRANJA (día + inicio), da igual el profesor
+ // ❗️ COMPROBACIÓN DE DUPLICADO *POR SEMANA*
   const duplicate = await prisma.lesson.findFirst({
-    where: { studentId: payload.studentId, dayOfWeek: payload.dayOfWeek, startMin: payload.startMin }
+    where: {
+      studentId: body.studentId,
+      dayOfWeek: Number(body.dayOfWeek),
+      startMin: Number(body.startMin),
+      weekStart, // 👈 clave
+    },
+    select: { id: true },
   });
-  if (duplicate) return NextResponse.json({ error: "duplicate_slot" }, { status: 409 });
+  if (duplicate) {
+    return NextResponse.json({ error: 'duplicate_slot' }, { status: 409 });
+  }
 
+  const created = await prisma.lesson.create({
+    data: {
+      studentId: body.studentId,
+      teacher: body.teacher,
+      dayOfWeek: Number(body.dayOfWeek),
+      startMin: Number(body.startMin),
+      durMin: Number(body.durMin),
+      weekStart, // 👈 guarda la semana
+    },
+    include: { student: true },
+  });
   // Sólo aviso: conflicto (no bloquea)
   const conflict = await hasConflicts({ ...payload });
 
-  const created = await prisma.lesson.create({
-    data: payload,
-    include: { student: { include: { extras: true } } }
-  });
   return NextResponse.json({ ...created, conflict }, { status: 201 });
 }
