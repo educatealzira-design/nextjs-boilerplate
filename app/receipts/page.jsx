@@ -337,7 +337,7 @@ export default function ReceiptsPage(){
   }
 
   async function makePaidPdf(row, month, opts = {}){
-    const logoUrl = opts.logoUrl || "/logo.png";
+    const logoUrl = opts.logoUrl || "/logoPDF.png";
 
     const { default: jsPDF } = await import("jspdf");
     const doc = new jsPDF({ unit:"pt", format:"a4" });
@@ -371,7 +371,7 @@ export default function ReceiptsPage(){
     doc.roundedRect(0, 0, doc.internal.pageSize.getWidth(), 24, 0, 0, "F");
 
     if (logoDataUrl){
-      doc.addImage(logoDataUrl, "PNG", margin, y-8, 120, 40, undefined, "FAST");
+      doc.addImage(logoDataUrl, "PNG", margin, y-30, 120, 80, undefined, "FAST");
     }
 
     T.set(22, true, primary);
@@ -417,6 +417,7 @@ export default function ReceiptsPage(){
     const prettyMethod = prettyMap[methodForPdf] || methodForPdf;
 
     doc.text(`Pagado por ${prettyMethod}`, margin+14, y+80);
+    doc.text("Muchas gracias.", margin+14, y+100);
 
     // Marca de agua PAGADO
     doc.saveGraphicsState();
@@ -427,16 +428,11 @@ export default function ReceiptsPage(){
     });
     doc.restoreGraphicsState();
 
-    // Pie
-    const footerY = doc.internal.pageSize.getHeight() - 36;
-    T.set(10,false,muted);
-    doc.text("Muchas gracias.", margin, footerY);
-
     return doc.output("blob");
   }
 
 
-  async function downloadPaidPdf(row, month, currentStatus, logoUrl="/logo.png"){
+  async function downloadPaidPdf(row, month, currentStatus, logoUrl="/logoPDF.png"){
     if (currentStatus !== "PAGADO") {
       alert("Sólo disponible cuando el estado es PAGADO.");
       return;
