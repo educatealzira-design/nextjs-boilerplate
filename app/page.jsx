@@ -1,3 +1,5 @@
+// app/page.jsx
+// 
 'use client';
 
 import React, { useEffect, useMemo, useState, useRef } from 'react';
@@ -92,7 +94,7 @@ function DroppableCell({ id, children, isOver, className }) {
 }
 
 
-function EventBlock({ lesson, student, conflict, teacherKey, onDelete, onSetActual}) {
+function EventBlock({ lesson, student, conflict, teacherKey, onDelete, onSetActual, highlight}) {
   const [open, setOpen] = useState(false);
   const displayStart = lesson.actualStartMin ?? lesson.startMin;
   const displayDur   = lesson.actualDurMin   ?? lesson.durMin;
@@ -113,7 +115,7 @@ function EventBlock({ lesson, student, conflict, teacherKey, onDelete, onSetActu
 
   return (
     <div
-      className={styles.eventBlock}
+      className={`${styles.eventBlock} ${highlight ? styles.eventHighlight : ''}`}
       title={`${student?.fullName||'(Alumno)'} — ${minutesToLabel(displayStart)} · ${formatDur(displayDur)}`}
     >
       {/* borrar */}
@@ -172,6 +174,10 @@ function EventBlock({ lesson, student, conflict, teacherKey, onDelete, onSetActu
   );
 }
 
+// Normalización para búsquedas
+function norm(s='') {
+  return String(s).normalize('NFD').replace(/\p{Diacritic}/gu,'').toLowerCase();
+}
 // Agrupación por etapas
 function normalize(s){ return String(s||'').toLowerCase().trim(); }
 // Devuelve uno de: 1-2PRIM, 3-4PRIM, 5-6PRIM, 1ESO, 2ESO, 3ESO, 4ESO, 1BACH, 2BACH, CICLO, Otros
@@ -214,6 +220,14 @@ export default function Page(){
   const exportRefSanti = useRef(null);
   const [weekStart, setWeekStart] = useState(()=> addDays(mondayOfWeek(new Date()), 7));
   const [weekSaved, setWeekSaved] = useState(false);
+  const [toastMsg, setToastMsg] = useState('');
+  const showToast = (msg) => {
+    setToastMsg(msg);
+    // se oculta solo en 2s
+    window.clearTimeout((showToast)._t);
+    (showToast)._t = window.setTimeout(() => setToastMsg(''), 2000);
+  };
+
 
   // DIAS DE LA SEMANA DEL HORARIO
   const weekDates = useMemo(() => {
@@ -461,6 +475,9 @@ export default function Page(){
           {here.map(ls => {
             const student = students.find(s=>s.id===ls.studentId);
             const conflict = conflictLocal(ls);
+            const q = textQ.trim();
+            const highlight = q.length > 0 && student && norm(student.fullName).includes(norm(q));
+
             return (
               <Draggable key={ls.id} id={`event:${ls.id}`}>
                 <EventBlock
@@ -470,6 +487,7 @@ export default function Page(){
                   teacherKey={teacherKey}
                   onDelete={()=>deleteLesson(ls.id)}
                   onSetActual={(opts)=>setLessonActual(ls.id, opts)}
+                  highlight={highlight}
                 />
               </Draggable>
             );
@@ -731,16 +749,33 @@ export default function Page(){
             </button>
 
             <button className={styles.btnPrimaryGS}
-                    onClick={async ()=>{
-                      const w = toISODateLocal(weekStart);
-                      const res = await fetch('/api/weeks', {
-                        method:'POST', headers:{'Content-Type':'application/json'},
-                        body: JSON.stringify({ weekStart: w, saved: true })
-                      });
-                      if (res.ok) setWeekSaved(true);
-                    }}>
+              onClick={async ()=>{
+                const w = toISODateLocal(weekStart);
+                // 1) Marca la semana actual como guardada
+                const res = await fetch('/api/weeks', {
+                  method:'POST', headers:{'Content-Type':'application/json'},
+                  body: JSON.stringify({ weekStart: w, saved: true })
+                });
+                if (res.ok) {
+                  setWeekSaved(true);
+                  // 2) Clona esta plantilla a la semana siguiente (sustituye)
+                  await fetch('/api/lessons/clone-to-next', {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({ weekStart: w })
+                  }).catch(()=>{});
+                  showToast('Semana guardada');
+                  } else {
+                    showToast('Error al guardar');
+                  }
+              }}>
               <img src="/guardar.png" alt="Guardar Semana" style={{ height: '34px', width: '34px', display: 'block' }} />
             </button>
+            {/* Toast / Popup superior */}
+            {toastMsg && (
+              <div className={styles.toast}>
+                {toastMsg}
+              </div>
+            )}
             <button onClick={()=>exportTeacher('NURIA')} className={styles.btnOutlinePDF}>PDF Nuria</button>
             <button onClick={()=>exportTeacher('SANTI')} className={styles.btnOutlinePDF}>PDF Santi</button>
             <Link href={`/send?weekStart=${toISODateLocal(weekStart)}`} className={styles.btnPrimarySend}>
