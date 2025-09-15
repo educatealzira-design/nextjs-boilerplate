@@ -572,11 +572,13 @@ export default function Page(){
       if (!CONNECTORS.has(normalize(p))) { surname = p; break; }
     }
 
+    // Si el primer nombre es común (más de 1 alumno con ese nombre)
     const count = firstNameCounts.get(firstNameNorm) || 0;
+    // Si hay más de 1 con ese nombre, añade el apellido abreviado
     if (count > 1 && surname) {
-      return `${firstName} ${surname.charAt(0)}.`; // ej: "Paula S."
+      return `${firstName} ${surname}`; // primer nombre + primer apellido
     }
-    return firstName; // ej: "Paula"
+    return firstName; 
   }
 
   function ExportGrid({ teacherKey, lessons, students }) {
