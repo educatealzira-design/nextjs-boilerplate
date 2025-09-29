@@ -61,6 +61,7 @@ function formatDur(min) {
   const h = Math.floor(mins / 60), m = mins % 60;
   return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
 }
+
 function range(start, end, step){ const out=[]; for(let i=start;i<=end;i+=step) out.push(i); return out; }
 function overlaps(aStart, aDur, bStart, bDur){ const aEnd=aStart+aDur, bEnd=bStart+bDur; return aStart<bEnd && bStart<aEnd; }
 
@@ -94,7 +95,7 @@ function DroppableCell({ id, children, isOver, className }) {
 }
 
 
-function EventBlock({ lesson, student, conflict, teacherKey, onDelete, onSetActual, highlight}) {
+function EventBlock({ lesson, student, conflict, teacherKey, onDelete, onSetActual, highlight, isGhost}) {
   const [open, setOpen] = useState(false);
   const displayStart = lesson.actualStartMin ?? lesson.startMin;
   const displayDur   = lesson.actualDurMin   ?? lesson.durMin;
@@ -115,7 +116,7 @@ function EventBlock({ lesson, student, conflict, teacherKey, onDelete, onSetActu
 
   return (
     <div
-      className={`${styles.eventBlock} ${highlight ? styles.eventHighlight : ''}`}
+      className={`${styles.eventBlock} ${highlight ? styles.eventHighlight : ''} ${isGhost ? styles.eventGhost : ''}`}
       title={`${student?.fullName||'(Alumno)'} — ${minutesToLabel(displayStart)} · ${formatDur(displayDur)}`}
     >
       {/* borrar */}
@@ -134,6 +135,25 @@ function EventBlock({ lesson, student, conflict, teacherKey, onDelete, onSetActu
         className={`${styles.clockBtn} ${lesson.actualDurMin!=null ? styles.clockActive : ''}`}
       >🕒</button>
 
+      {!isGhost && (
+        <>
+          {/* borrar */}
+          <button
+            aria-label="Eliminar" title="Eliminar"
+            onPointerDown={stop} onMouseDown={stop} onTouchStart={stop}
+            onClick={(e)=>{ stop(e); onDelete?.(); }}
+            className={styles.deleteBtn}
+          >✕</button>
+          {/* reloj */}
+          <button
+            aria-label="Duración real" title="Duración real"
+            onPointerDown={stop} onMouseDown={stop} onTouchStart={stop}
+            onClick={(e)=>{ stop(e); setOpen(v=>!v); }}
+            className={`${styles.clockBtn} ${lesson.actualDurMin!=null ? styles.clockActive : ''}`}
+          >🕒</button>
+        </>
+      )}
+
       <div className={styles.eventText}>
         <div className={`${styles.eventName} ${conflict ? styles.conflictName : ''}`}>
           {student?.fullName || '(Alumno)'}
@@ -143,7 +163,7 @@ function EventBlock({ lesson, student, conflict, teacherKey, onDelete, onSetActu
         </div>
       </div>
 
-      {open && (
+      {!isGhost && open && (
         <div className={styles.popover} onClick={stop}>
           <div className={styles.popTitle}>Duración real</div>
           <div className={styles.popRow}>
@@ -469,6 +489,13 @@ export default function Page(){
     const here = eventsMap.get(`${dia}:${inicioMin}:${teacherKey}`) || [];
     const bgClass = teacherKey === 'NURIA' ? styles.cellNuria : styles.cellSanti;
 
+    // Clases que comenzaron en la franja anterior y “invaden” esta (90+ min)
+    const carryOvers = (eventsMap.get(`${dia}:${inicioMin - SLOT_MIN}:${teacherKey}`) || [])
+      .filter(ls => {
+        const dur = (ls.actualDurMin ?? ls.durMin) || 0;
+        return dur >= 90;
+    });
+
     return (
       <DroppableCell id={id} className={`${bgClass} ${className || ''}`}>
         <div className={styles.cellInner}>
@@ -490,6 +517,23 @@ export default function Page(){
                   highlight={highlight}
                 />
               </Draggable>
+            );
+          })}
+          {/* Copia visual (no draggable) de la franja anterior si duraba ≥90 */}
+          {carryOvers.map(ls => {
+            const student = students.find(s=>s.id===ls.studentId);
+            const conflict = conflictLocal(ls);
+            return (
+              <EventBlock
+                key={`${ls.id}-ghost-${inicioMin}`}
+                lesson={ls}
+                student={student}
+                conflict={!!conflict}
+                teacherKey={teacherKey}
+                onDelete={undefined}
+                onSetActual={undefined}
+                isGhost
+              />
             );
           })}
         </div>
@@ -671,8 +715,18 @@ export default function Page(){
               {/* Celdas del día a través de TODAS las horas */}
               {timeSlots.map(start => {
                 const here = lessons.filter(
-                  l => l.teacher === teacherKey && l.dayOfWeek === d.key && l.startMin === start
+                  l => l.teacher === teacherKey &&
+                       l.dayOfWeek === d.key &&
+                       l.startMin === start
                 );
+
+                // También mostrar los que empezaron en la franja anterior y duran ≥90
+                const carryOvers = lessons.filter(l => {
+                  if (l.teacher !== teacherKey || l.dayOfWeek !== d.key) return false;
+                  const realStart = l.actualStartMin ?? l.startMin;
+                  const realDur   = l.actualDurMin   ?? l.durMin;
+                  return realDur >= 90 && realStart === (start - SLOT_MIN);
+                });
 
                 const hasConflict = here.some(ls => {
                   const st = students.find(s => s.id === ls.studentId);
@@ -690,9 +744,8 @@ export default function Page(){
                   >
                     {hasConflict && <div className={styles.exportConflict} />}
                     <div className={styles.exportStack}>
-                      {here.map(ls => {
+                      {[...here, ...carryOvers].map(ls => {
                         const st = students.find(s => s.id === ls.studentId);
-                        const siblings = here.map(l => students.find(s => s.id === l.studentId));
                         const displayStart = ls.actualStartMin ?? ls.startMin;
                         const displayDur   = ls.actualDurMin ?? ls.durMin;
 

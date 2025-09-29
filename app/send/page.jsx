@@ -30,6 +30,43 @@ function mondayOf(date){
 }
 function addDays(d, n){ const x = new Date(d); x.setDate(x.getDate()+n); return x; }
 
+function toMinutes(hhmm) {
+  const [h, m] = String(hhmm||'0:0').split(':').map(Number);
+  return (Number(h)||0)*60 + (Number(m)||0);
+}
+
+function labelDot(mins) {
+  const h = Math.floor(mins/60), m = mins%60;
+  return m ? `${h}.${String(m).padStart(2,'0')}` : `${h}`;
+}
+
+function lessonBounds(ls) {
+  const start = ls.actualStartMin ?? ls.startMin;
+  const dur   = ls.actualDurMin   ?? ls.durMin;
+  return { start, end: start + dur };
+}
+
+function mergeContiguousByTeacher(dayLessons) {
+  const arr = dayLessons
+    .map(ls => {
+      const { start, end } = lessonBounds(ls);
+      return { ...ls, start, end };
+    })
+    .sort((a,b) => a.start - b.start || a.teacher.localeCompare(b.teacher));
+
+  const out = [];
+  for (const cur of arr) {
+    const prev = out[out.length - 1];
+    if (prev && prev.teacher === cur.teacher && prev.end === cur.start) {
+      prev.end = cur.end;              // une el rango
+      prev._mergedIds.push(cur.id);    // opcional: saber qué ids se unieron
+    } else {
+      out.push({ ...cur, _mergedIds: [cur.id] });
+    }
+  }
+  return out;
+}
+
 function SendInner(){
   function toYYYYMMDD(d) {
     const yy = d.getFullYear();
@@ -51,6 +88,7 @@ function SendInner(){
     const dd = String(Number(m[3])).padStart(2, '0');
     return `${y}-${mm}-${dd}`;
   }, [weekStartStr, weekStart]);
+  
   const [students, setStudents] = useState([]);
   const [lessons, setLessons] = useState([]);
   const [doneIds, setDoneIds] = useState(new Set()); //ids de tarjetas marcadas como hechas (copiado o whatsapp)
@@ -62,6 +100,25 @@ function SendInner(){
       return next;
     });
   };
+
+  // 🔎 Buscador
+  const [q, setQ] = useState('');
+
+  const filteredStudents = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    if (!t) return students;
+
+    return students.filter(st => {
+      const name     = String(st.fullName || '').toLowerCase();
+      const guardian = String(st.guardianName || '').toLowerCase();
+      const course   = String(st.course || '').toLowerCase();
+      return (
+        name.includes(t) ||
+        guardian.includes(t) ||
+        course.includes(t)
+      );
+    });
+  }, [students, q]);
 
   async function persistDone(studentId) {
     try {
@@ -201,6 +258,28 @@ function SendInner(){
     const child = firstName(student.fullName);
     const parent = firstName(student.guardianName) || "familia";
 
+    // Agrupar por día
+    const byDay = new Map();
+    for (const ls of items) {
+      if (!byDay.has(ls.dayOfWeek)) byDay.set(ls.dayOfWeek, []);
+      byDay.get(ls.dayOfWeek).push(ls);
+    }
+
+    const mergedLines = [];
+    for (const d of [1,2,3,4,5]) {
+      const dayLs = byDay.get(d) || [];
+      if (!dayLs.length) continue;
+      const merged = mergeContiguousByTeacher(dayLs);
+      const parts = merged.map(seg => {
+        const from = labelDot(seg.start);
+        const to   = labelDot(seg.end);
+        const prof = seg.teacher === 'NURIA' ? 'conmigo' : 'con Santi';
+        return `de ${from} a ${to} ${prof}`;
+      });
+      mergedLines.push(`${DAY_NAMES[d]} ${parts.join(' y ')}`);
+    }
+    const body = mergedLines.join('; ');
+
     // Formatea el cuerpo con las clases
     if (!items || items.length === 0) {
       if (isPrimary(student) || isLowerESO(student)) {
@@ -208,15 +287,6 @@ function SendInner(){
       }
       return `Hola ${child}, esta semana no tienes clases programadas.`;
     }
-
-    const parts = items.map(ls => {
-      const start = (ls.actualStartMin ?? ls.startMin);
-      const dur = (ls.actualDurMin ?? ls.durMin);
-      return `${DAY_NAMES[ls.dayOfWeek]} de ${toHHMM(start)} a ${endTime(start, dur)} ${teacherText(ls.teacher)}`;
-    });
-    const body = parts.length === 1
-      ? parts[0]
-      : parts.slice(0, -1).join(', ') + ' y ' + parts[parts.length - 1];
 
     // 👉 Si es Primaria: mensaje a padre/madre con “tendrá”
     if (isPrimary(student)) {
@@ -240,7 +310,20 @@ function SendInner(){
           </Link>
           <Link href="/students" className={styles.btnPrimaryBD}>
               <img src="/BD.png" alt="Base de datos" style={{ height: '34px', width: '34px', display: 'block' }} />
-            </Link>
+          </Link>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar…"
+            style={{
+              padding: '6px 10px',
+              border: '1px solid #d6d3d1',
+              borderRadius: 8,
+              minWidth: 100,
+              outline: 'none',
+              backgroundColor: '#f3efeb',
+            }}
+          />
           <div className={styles.weekBadge}>
             Semana: {ddmmyy(weekStart)} — {ddmmyy(addDays(weekStart, 4))}
           </div>
@@ -251,7 +334,7 @@ function SendInner(){
       <div className={styles.fullWidth}>
         <div className={styles.board}>
           <div className={styles.cardsGrid}>
-            {students.map(st => {
+            {filteredStudents.map(st => {
               const items = lessonsByStudent.get(st.id) || [];
               const msg = buildMessage(st, items);
               const phone = (st.phone || '').replace(/\D/g,'');

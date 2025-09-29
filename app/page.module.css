@@ -361,6 +361,10 @@
   box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25);
 }
 
+.eventGhost {
+  opacity: 0.6;            /* un poco más claro */
+  outline: 2px dashed rgba(0,0,0,.15);
+}
 
 
 
