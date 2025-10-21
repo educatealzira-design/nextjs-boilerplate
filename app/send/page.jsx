@@ -254,33 +254,57 @@ function SendInner(){
     return /\b(?:1|2)\s*(?:o|\b)?\s*(?:de\s*)?eso\b/.test(c);
   }
 
-  function buildMessage(student, items){
+  // --- Detección profesor por defecto según curso/asignaturas ---
+  const SCI = ['matemáticas','matematicas','física','fisica','química','quimica'];
+  const LET = ['castellano','valenciano','inglés','ingles'];
+
+  function normSubj(s=''){ return s.toLowerCase().trim(); }
+  function hasOnly(set, arr){
+    if (arr.length === 0) return false;
+    return arr.every(x => set.includes(normSubj(x)));
+  }
+
+  function isPrimary(student){
+    return /\bprim/.test(String(student?.course||'').toLowerCase());
+  }
+
+  /**
+   * Devuelve 'NURIA' | 'SANTI' | null
+   * - Primaria => 'NURIA'
+   * - Solo ciencias => 'SANTI'
+   * - Solo letras  => 'NURIA'
+   * - Mixto o sin asignaturas => null
+   */
+  function inferDefaultTeacher(student){
+    if (isPrimary(student)) return 'NURIA';
+
+    const subjects = Array.isArray(student?.subjects) ? student.subjects : [];
+    const names = subjects.map(s => s?.name || '').filter(Boolean).map(normSubj);
+
+    if (names.length === 0) return null;
+
+    const onlySci = hasOnly(SCI, names);
+    const onlyLet = hasOnly(LET, names);
+
+    if (onlySci && !onlyLet) return 'SANTI';
+    if (onlyLet && !onlySci) return 'NURIA';
+    return null; // mezcla
+  }
+
+  // Para el texto por-clase si NO hay profesor fijo
+  function teacherSuffix(t){
+    return t === 'NURIA' ? ' conmigo' : ' con Santi';
+  }
+
+  // nombre de pila seguro
+  function firstName(s=''){ return String(s).trim().split(/\s+/)[0] || ''; }
+
+  function buildMessage(student, items) {
     const child = firstName(student.fullName);
     const parent = firstName(student.guardianName) || "familia";
+    const fixedTeacher = inferDefaultTeacher(student);
 
-    // Agrupar por día
-    const byDay = new Map();
-    for (const ls of items) {
-      if (!byDay.has(ls.dayOfWeek)) byDay.set(ls.dayOfWeek, []);
-      byDay.get(ls.dayOfWeek).push(ls);
-    }
-
-    const mergedLines = [];
-    for (const d of [1,2,3,4,5]) {
-      const dayLs = byDay.get(d) || [];
-      if (!dayLs.length) continue;
-      const merged = mergeContiguousByTeacher(dayLs);
-      const parts = merged.map(seg => {
-        const from = labelDot(seg.start);
-        const to   = labelDot(seg.end);
-        const prof = seg.teacher === 'NURIA' ? 'conmigo' : 'con Santi';
-        return `de ${from} a ${to} ${prof}`;
-      });
-      mergedLines.push(`${DAY_NAMES[d]} ${parts.join(' y ')}`);
-    }
-    const body = mergedLines.join('; ');
-
-    // Formatea el cuerpo con las clases
+    // Sin clases esta semana
     if (!items || items.length === 0) {
       if (isPrimary(student) || isLowerESO(student)) {
         return `Hola ${parent}, esta semana ${child} no tiene clases programadas.`;
@@ -288,11 +312,37 @@ function SendInner(){
       return `Hola ${child}, esta semana no tienes clases programadas.`;
     }
 
-    // 👉 Si es Primaria: mensaje a padre/madre con “tendrá”
+    // Agrupar por día lectivo y fusionar tramos contiguos
+    const byDay = new Map();
+    for (const ls of items) {
+      if (!byDay.has(ls.dayOfWeek)) byDay.set(ls.dayOfWeek, []);
+      byDay.get(ls.dayOfWeek).push(ls);
+    }
+
+    const mergedLines = [];
+    for (const d of [1, 2, 3, 4, 5]) { // Lun–Vie
+      const dayLs = (byDay.get(d) || []).slice()
+        .sort((a,b) => (a.actualStartMin ?? a.startMin) - (b.actualStartMin ?? b.startMin));
+      if (!dayLs.length) continue;
+
+      const merged = mergeContiguousByTeacher(dayLs);
+      const parts = merged.map(seg => {
+        const from = labelDot(seg.start);
+        const to   = labelDot(seg.end);
+        // Si hay profesor fijo (Primaria / solo ciencias / solo letras) NO añadimos “con …”
+        const prof = fixedTeacher ? '' : teacherSuffix(seg.teacher); // devuelve ' conmigo' o ' con Santi'
+        return `de ${from} a ${to}${prof}`;
+      });
+
+      mergedLines.push(`${DAY_NAMES[d]} ${parts.join(' y ')}`);
+    }
+
+    const body = mergedLines.join('; ');
+
+    // Redacción final
     if (isPrimary(student)) {
       return `Hola ${parent}, ${child} tendrá clase ${body}. Muchas gracias.`;
     }
-    // Secundaria/Bach/etc.: mensaje al alumno con “tienes”
     return `Hola ${child}, tienes clase ${body}. Muchas gracias.`;
   }
 
