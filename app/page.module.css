@@ -40,15 +40,15 @@
   transform: scale(1.12);
 }
 /* ======= PANELES ======= */
-.leftPanel{ grid-column:1/-1; display:flex; margin: 15px; flex-direction:column; gap:12px; }
-@media (min-width:768px){ .leftPanel{ grid-column:1/span 3; } }
+.leftPanel{ grid-column:1/-1; display:flex; margin: 15px; flex-direction:column; gap:22px; }
+@media (min-width:768px){ .leftPanel{ grid-column:1/span 2; } }
 .rightPanel{ grid-column:1/-1; margin: 15px;}
-@media (min-width:768px){ .rightPanel{ grid-column:4/-1; } }
+@media (min-width:768px){ .rightPanel{ grid-column:3/-1; } }
 
 .caption{ font-size:13px; color:var(--muted); line-height:1.45; }
 
 /* ======= BUSCADOR ======= */
-.searchRow{ display:flex; gap:8px; }
+.searchRow{ display:flex; gap:4px; }
 .input, .select{
   border:1px solid var(--border); border-radius:12px; padding:8px 12px;
   font:inherit; width:100%; background:#fff; outline:none;
@@ -60,7 +60,7 @@
 .listHeader{ font-size:13px; font-weight:700; }
 .studentList{
   background:#fff;
-  padding:8px; max-height:60vh; overflow:auto; display:grid; gap:8px;
+  padding:8px; max-height:62vh; overflow:auto; display:grid; gap:8px;
 }
 .studentList::-webkit-scrollbar{ width:10px; }
 .studentList::-webkit-scrollbar-thumb{ background:var(--beige-200); border-radius:999px; }
@@ -94,7 +94,7 @@
 .board::-webkit-scrollbar{ height:10px; width:10px; }
 .board::-webkit-scrollbar-thumb{ background:var(--beige-200); border-radius:999px; }
 
-.scheduleGrid{ display:grid; gap:0; }
+.scheduleGrid{ display:grid; gap:0}
 
 /* Cabecera días (beige y sticky) */
 .dayHeader{
@@ -102,6 +102,7 @@
   background: var(--beige-100); border-bottom:1px solid var(--border);
   position:sticky; top:0; z-index:5;
 }
+.leftHeaderDay, .leftHeaderTeacher, .leftHeader{width: 90px;}
 
 /* Franja de profesores (texto negro pequeño, fondo blanco) */
 .teacherHeader{

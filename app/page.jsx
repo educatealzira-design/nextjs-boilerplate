@@ -47,7 +47,7 @@ const TEACHERS = [
 ];
 
 const START_HOUR = 15.5;
-const END_HOUR = 21.5;
+const END_HOUR = 20.5;
 const SLOT_MIN = 60;
 
 function toMinutes(hhmm) {
@@ -561,8 +561,10 @@ export default function Page(){
 
 
   const anyConflict = lessons.some(ls => conflictLocal(ls));
-  const gridColsStyle = { gridTemplateColumns: `140px repeat(${timeSlots.length}, 1fr)` };
-
+  const LEFT_COL_W = 90; // prueba 88–110 para afinar
+  const gridColsStyle = {
+    gridTemplateColumns: `${LEFT_COL_W}px repeat(${timeSlots.length}, 1fr)`
+  };
   async function setLessonActual(id, { startHHMM, endHHMM, presetMin, clear }) {
     const curr = lessons.find(l => l.id === id);
     if (!curr) { alert('Clase no encontrada'); return { ok:false }; }
@@ -868,7 +870,7 @@ export default function Page(){
                     <div className={styles.studentName}>{s.fullName}</div>
                     <div className={styles.studentMetaRow}>
                       <div className={styles.studentMeta}>
-                        {s.course} <span className={styles.muted}>· {courseGroup(s.course)}</span>
+                        {s.course}
                       </div>
                       {(() => {
                         const planned = plannedMinutesByStudent.get(s.id) || 0;

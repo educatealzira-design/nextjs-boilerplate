@@ -9,11 +9,11 @@
   --beige-300: #d9d1c8;   /* botones */
   --ink:       #222;      /* texto principal */
   --muted:     #6b6b6b;   /* texto secundario */
+  --left-col-w: 112px;
 
   --gap: 16px;
   --radius: 12px;
   --cell-h: 144px;
-  --border: var(--beige-200);
 }
 
 @theme inline {
