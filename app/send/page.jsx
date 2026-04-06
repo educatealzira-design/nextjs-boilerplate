@@ -327,23 +327,31 @@ function SendInner(){
 
       const merged = mergeContiguousByTeacher(dayLs);
       const parts = merged.map(seg => {
-        const from = labelDot(seg.start);
-        const to   = labelDot(seg.end);
+        const dur = seg.end - seg.start;
         // Si hay profesor fijo (Primaria / solo ciencias / solo letras) NO añadimos “con …”
-        const prof = fixedTeacher ? '' : teacherSuffix(seg.teacher); // devuelve ' conmigo' o ' con Santi'
-        return `de ${from} a ${to}${prof}`;
+        const prof = fixedTeacher ? '' : teacherSuffix(seg.teacher);
+        if (dur <= 60) return `a las ${labelDot(seg.start)}${prof}`;
+        return `de ${labelDot(seg.start)} a ${labelDot(seg.end)}${prof}`;
       });
 
       mergedLines.push(`${DAY_NAMES[d]} ${parts.join(' y ')}`);
     }
 
-    const body = mergedLines.join('; ');
-
-    // Redacción final
-    if (isPrimary(student)) {
-      return `Hola ${parent}, ${child} tendrá clase ${body}. Muchas gracias.`;
+    // Un solo día: formato inline
+    if (mergedLines.length === 1) {
+      const body = mergedLines[0];
+      if (isPrimary(student)) {
+        return `Hola ${parent}, ${child} tendrá clase ${body}. Muchas gracias.`;
+      }
+      return `Hola ${child}, tienes clase ${body}. Muchas gracias.`;
     }
-    return `Hola ${child}, tienes clase ${body}. Muchas gracias.`;
+
+    // Varios días: formato lista con viñetas
+    const listItems = mergedLines.map(line => `* ${line}`).join('\n');
+    if (isPrimary(student)) {
+      return `Hola ${parent}, ${child} tendrá clase:\n${listItems}\nMuchas gracias.`;
+    }
+    return `Hola ${child}, esta semana tienes clase:\n${listItems}\nMuchas gracias.`;
   }
 
   return (

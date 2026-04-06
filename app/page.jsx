@@ -241,12 +241,39 @@ export default function Page(){
   const [weekStart, setWeekStart] = useState(()=> addDays(mondayOfWeek(new Date()), 7));
   const [weekSaved, setWeekSaved] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
+  const [selectedStudentId, setSelectedStudentId] = useState(null);
+  const [templates, setTemplates] = useState([]);
+  const [selectedTemplate, setSelectedTemplate] = useState('');
   const showToast = (msg) => {
     setToastMsg(msg);
-    // se oculta solo en 2s
     window.clearTimeout((showToast)._t);
     (showToast)._t = window.setTimeout(() => setToastMsg(''), 2000);
   };
+
+  async function loadTemplates() {
+    const res = await fetch('/api/templates');
+    if (res.ok) setTemplates(await res.json());
+  }
+
+  async function applyTemplate() {
+    if (!selectedTemplate) return;
+    if (lessons.length > 0) {
+      const ok = window.confirm('¿Sustituir las clases de esta semana con la plantilla seleccionada?');
+      if (!ok) return;
+    }
+    const w = toISODateLocal(weekStart);
+    const res = await fetch('/api/templates/apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ templateWeekStart: selectedTemplate, targetWeekStart: w }),
+    });
+    if (res.ok) {
+      await loadAll();
+      showToast('Plantilla aplicada');
+    } else {
+      showToast('Error al aplicar plantilla');
+    }
+  }
 
 
   // DIAS DE LA SEMANA DEL HORARIO
@@ -324,24 +351,7 @@ export default function Page(){
     await exportElementToPdf(el, `Horario-${teacherKey}.pdf`);
   }
 
-  async function seedFromLastIfEmpty(weekStartDate) {
-    // weekStartDate es un Date (lunes de la semana actual en tu state)
-    const w = toISODateLocal(weekStartDate);
-    try {
-      const res = await fetch('/api/lessons/seed-from-last', {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json' },
-        body: JSON.stringify({ weekStart: w })
-      });
-      // 201 -> se sembró; 200/404 -> no hacía falta o no hay fuente; todos OK para continuar
-      return res.ok;
-    } catch (e) {
-      console.error('seed-from-last error', e);
-      return false;
-    }
-  }
-
-  async function loadAll(autoCloneIfEmpty = true){
+  async function loadAll(){
     const w = toISODateLocal(weekStart);
     const [sRes, lRes, stRes] = await Promise.all([
       fetch('/api/students'),
@@ -359,23 +369,8 @@ export default function Page(){
       actualStartMin:x.actualStartMin ?? null, actualDurMin:x.actualDurMin ?? null,
     })));
     setWeekSaved(!!st.saved);
-
-    // 👉 Nueva lógica: si la semana está vacía, siembra desde la última guardada
-    if (autoCloneIfEmpty && l.length === 0) {
-      const seededOk = await seedFromLastIfEmpty(weekStart);
-      if (seededOk) {
-        // Recarga SOLO las lessons de esta semana tras sembrar
-        const l2Res = await fetch(`/api/lessons?weekStart=${w}`);
-        const l2 = await l2Res.json();
-        setLessons(l2.map(x=>({
-          id:x.id, studentId:x.studentId, teacher:x.teacher, dayOfWeek:x.dayOfWeek,
-          startMin:x.startMin, durMin:x.durMin,
-          actualStartMin:x.actualStartMin ?? null, actualDurMin:x.actualDurMin ?? null,
-        })));
-      }
-    }
   }
-  useEffect(()=>{ loadAll(); }, []);
+  useEffect(()=>{ loadAll(); loadTemplates(); }, []);
   useEffect(()=>{ loadAll(); }, [weekStart]);
 
   const timeSlots = useMemo(()=> range(toMinutes(START_HOUR), toMinutes(END_HOUR), SLOT_MIN), []);
@@ -503,7 +498,8 @@ export default function Page(){
             const student = students.find(s=>s.id===ls.studentId);
             const conflict = conflictLocal(ls);
             const q = textQ.trim();
-            const highlight = q.length > 0 && student && norm(student.fullName).includes(norm(q));
+            const highlight = (q.length > 0 && student && norm(student.fullName).includes(norm(q)))
+                           || ls.studentId === selectedStudentId;
 
             return (
               <Draggable key={ls.id} id={`event:${ls.id}`}>
@@ -806,24 +802,41 @@ export default function Page(){
             <button className={styles.btnPrimaryGS}
               onClick={async ()=>{
                 const w = toISODateLocal(weekStart);
-                // 1) Marca la semana actual como guardada
                 const res = await fetch('/api/weeks', {
                   method:'POST', headers:{'Content-Type':'application/json'},
                   body: JSON.stringify({ weekStart: w, saved: true })
                 });
                 if (res.ok) {
                   setWeekSaved(true);
-                  // 2) Clona esta plantilla a la semana siguiente (sustituye)
-                  await fetch('/api/lessons/clone-to-next', {
-                    method:'POST', headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({ weekStart: w })
-                  }).catch(()=>{});
-                  showToast('Semana guardada');
-                  } else {
-                    showToast('Error al guardar');
-                  }
+                  loadTemplates();
+                  showToast('Plantilla guardada');
+                } else {
+                  showToast('Error al guardar');
+                }
               }}>
               <img src="/guardar.png" alt="Guardar Semana" style={{ height: '34px', width: '34px', display: 'block' }} />
+            </button>
+            <select
+              value={selectedTemplate}
+              onChange={e => setSelectedTemplate(e.target.value)}
+              className={styles.weekBadge}
+              style={{ minWidth: '180px', maxWidth: '220px', border: 'none', cursor: 'pointer' }}
+            >
+              <option value="">— Plantilla —</option>
+              {templates.map(t => (
+                <option key={t.weekStart} value={t.weekStart}>
+                  {t.label} ({t.lessonCount})
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={applyTemplate}
+              disabled={!selectedTemplate}
+              className={styles.weekBadge}
+              style={{ border: 'none', cursor: selectedTemplate ? 'pointer' : 'default', opacity: selectedTemplate ? 1 : 0.5 }}
+              title="Aplicar plantilla a esta semana"
+            >
+              Aplicar
             </button>
             {/* Toast / Popup superior */}
             {toastMsg && (
@@ -863,9 +876,13 @@ export default function Page(){
           <div className={styles.studentList}>
             {filtered.map(s => {
               const count = countsByStudent.get(s.id) || 0;
+              const isSelected = selectedStudentId === s.id;
               return (
                 <Draggable key={s.id} id={`student:${s.id}`}>
-                  <div className={`${styles.studentCard} ${count>0 ? styles.assigned : ''}`}>
+                  <div
+                    className={`${styles.studentCard} ${count>0 ? styles.assigned : ''} ${isSelected ? styles.studentCardSelected : ''}`}
+                    onClick={() => setSelectedStudentId(prev => prev === s.id ? null : s.id)}
+                  >
                     {count>0 && <span className={styles.assignedBadge}>{count}</span>}
                     <div className={styles.studentName}>{s.fullName}</div>
                     <div className={styles.studentMetaRow}>

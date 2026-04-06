@@ -68,6 +68,12 @@
 .studentCard{
   position:relative; background:#efebe6;
   border:1px solid var(--border); border-radius:8px; padding:10px;
+  cursor:pointer;
+}
+.studentCardSelected {
+  border: 2px solid #F59E0B !important;
+  background: #FEF3C7 !important;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25);
 }
 .studentName{ font-size:14px; font-weight:700; }
 .studentMeta{ font-size:12px; color:#555555; }
