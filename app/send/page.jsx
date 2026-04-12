@@ -307,9 +307,9 @@ function SendInner(){
     // Sin clases esta semana
     if (!items || items.length === 0) {
       if (isPrimary(student) || isLowerESO(student)) {
-        return `Hola ${parent}, esta semana ${child} no tiene clases programadas.`;
+        return `Hola ${parent}, la semana que viene ${child} no tendrá clases programadas.`;
       }
-      return `Hola ${child}, esta semana no tienes clases programadas.`;
+      return `Hola ${child}, la semana que viene no tendrás clases programadas.`;
     }
 
     // Agrupar por día lectivo y fusionar tramos contiguos
@@ -343,7 +343,7 @@ function SendInner(){
       if (isPrimary(student)) {
         return `Hola ${parent}, ${child} tendrá clase ${body}. Muchas gracias.`;
       }
-      return `Hola ${child}, tienes clase ${body}. Muchas gracias.`;
+      return `Hola ${child}, la semana que viene tendrás clase ${body}. Muchas gracias.`;
     }
 
     // Varios días: formato lista con viñetas
@@ -351,7 +351,7 @@ function SendInner(){
     if (isPrimary(student)) {
       return `Hola ${parent}, ${child} tendrá clase:\n${listItems}\nMuchas gracias.`;
     }
-    return `Hola ${child}, esta semana tienes clase:\n${listItems}\nMuchas gracias.`;
+    return `Hola ${child}, la semana que viene tendrás clase:\n${listItems}\nMuchas gracias.`;
   }
 
   return (
