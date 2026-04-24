@@ -229,7 +229,7 @@ function SendInner(){
     return map;
   }, [lessons]);
 
-  function teacherText(t){ return t === 'NURIA' ? 'conmigo' : 'con Santi'; }
+  function teacherText(t){ return t === 'NURIA' ? 'con Nuria' : 'con Santi'; }
 
   // obtiene el primer nombre (o cadena vacía)
   function firstName(s = "") {
@@ -293,7 +293,7 @@ function SendInner(){
 
   // Para el texto por-clase si NO hay profesor fijo
   function teacherSuffix(t){
-    return t === 'NURIA' ? ' conmigo' : ' con Santi';
+    return t === 'NURIA' ? ' con Nuria' : ' con Santi';
   }
 
   // nombre de pila seguro
